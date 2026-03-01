@@ -1,0 +1,13 @@
+diff --git a/browser/themes/osx/browser.css b/browser/themes/osx/browser.css
+index 79f62b14809196e6ac073b8e560331e96be5d990..dcec04606e78c66673fb602b6a986321d20e1d4c 100644
+--- a/browser/themes/osx/browser.css
++++ b/browser/themes/osx/browser.css
+@@ -37,7 +37,7 @@
+ 
+ .titlebar-buttonbox {
+   &:-moz-locale-dir(ltr) {
+-    margin-inline: 12px 0;
++    margin-inline: 12px 4px;
+ 
+     @media (-moz-mac-rtl) {
+       margin-inline: 12px;

@@ -1,0 +1,30 @@
+diff --git a/browser/components/urlbar/UrlbarValueFormatter.sys.mjs b/browser/components/urlbar/UrlbarValueFormatter.sys.mjs
+index 3a8c233dd1e05c070e497ec9877e65b9d8a3e87b..dd2a7aac6945331a3a50a0d7f6d62aeda396b560 100644
+--- a/browser/components/urlbar/UrlbarValueFormatter.sys.mjs
++++ b/browser/components/urlbar/UrlbarValueFormatter.sys.mjs
+@@ -76,7 +76,7 @@ export class UrlbarValueFormatter {
+       if (this.#updateInstance != instance) {
+         return;
+       }
+-      this.#formattingApplied = this.#formatURL() || this.#formatSearchAlias();
++      this.#formattingApplied = this._formatURL() || this.#formatSearchAlias();
+     });
+   }
+ 
+@@ -370,7 +370,7 @@ export class UrlbarValueFormatter {
+    * @returns {boolean}
+    *   True if formatting was applied and false if not.
+    */
+-  #formatURL() {
++  _formatURL() {
+     let urlMetaData = this.#getUrlMetaData();
+     if (!urlMetaData) {
+       return false;
+@@ -639,6 +639,7 @@ export class UrlbarValueFormatter {
+       this.#window.requestAnimationFrame(() => {
+         if (instance == this.#resizeInstance) {
+           this.#ensureFormattedHostVisible();
++          this._formatURL();
+         }
+       });
+     }, 100);

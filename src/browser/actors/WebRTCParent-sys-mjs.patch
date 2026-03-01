@@ -1,0 +1,12 @@
+diff --git a/browser/actors/WebRTCParent.sys.mjs b/browser/actors/WebRTCParent.sys.mjs
+index ffa7d61ded4f2cf5866d0cb12dd9b14728a63570..5575943208a734f820758fd50a80503061934d56 100644
+--- a/browser/actors/WebRTCParent.sys.mjs
++++ b/browser/actors/WebRTCParent.sys.mjs
+@@ -152,6 +152,7 @@ export class WebRTCParent extends JSWindowActorParent {
+ 
+     let tabbrowser = browser.ownerGlobal.gBrowser;
+     if (tabbrowser) {
++      browser.ownerGlobal.gZenMediaController.updateMediaSharing(state);
+       tabbrowser.updateBrowserSharing(browser, {
+         webRTC: state,
+       });

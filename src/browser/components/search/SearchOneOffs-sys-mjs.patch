@@ -1,0 +1,13 @@
+diff --git a/browser/components/search/SearchOneOffs.sys.mjs b/browser/components/search/SearchOneOffs.sys.mjs
+index 3e5b29bc0a740df503e69f811ef01de1d6f0340a..b1bcdfc8c1bba506370f1a05fb31630c64bbd6d3 100644
+--- a/browser/components/search/SearchOneOffs.sys.mjs
++++ b/browser/components/search/SearchOneOffs.sys.mjs
+@@ -473,7 +473,7 @@ export class SearchOneOffs {
+     // For the search-bar, always show the one-off buttons where there is an
+     // option to add an engine.
+     let addEngineNeeded = isSearchBar && addEngines.length;
+-    let hideOneOffs = (await this.willHide()) && !addEngineNeeded;
++    let hideOneOffs = (await this.willHide()) && !addEngineNeeded || Services.prefs.getBoolPref("zen.urlbar.hide-one-offs");
+ 
+     // The _engineInfo cache is used by more consumers, thus it is not a good
+     // representation of whether this method already updated the one-off buttons

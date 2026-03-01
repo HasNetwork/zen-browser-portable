@@ -1,0 +1,31 @@
+diff --git a/browser/components/extensions/parent/ext-browser.js b/browser/components/extensions/parent/ext-browser.js
+index 2488267f4be5142bcacf984635d9e9ecdb5f02e9..03127808b3cae28850cc276fac0f1acbca85d326 100644
+--- a/browser/components/extensions/parent/ext-browser.js
++++ b/browser/components/extensions/parent/ext-browser.js
+@@ -354,6 +354,7 @@ class TabTracker extends TabTrackerBase {
+   }
+ 
+   getId(nativeTab) {
++    if (nativeTab.hasAttribute("zen-empty-tab")) return -1;
+     let id = this._tabs.get(nativeTab);
+     if (id) {
+       return id;
+@@ -388,6 +389,7 @@ class TabTracker extends TabTrackerBase {
+     if (nativeTab.ownerGlobal.closed) {
+       throw new Error("Cannot attach ID to a tab in a closed window.");
+     }
++    if (nativeTab.hasAttribute("zen-empty-tab")) return;
+ 
+     this._tabs.set(nativeTab, id);
+     if (nativeTab.linkedBrowser) {
+@@ -1273,6 +1275,10 @@ class TabManager extends TabManagerBase {
+   }
+ 
+   canAccessTab(nativeTab) {
++    if (nativeTab.hasAttribute("zen-empty-tab")) {
++      return false
++    }
++
+     // Check private browsing access at browser window level.
+     if (!this.extension.canAccessWindow(nativeTab.ownerGlobal)) {
+       return false;

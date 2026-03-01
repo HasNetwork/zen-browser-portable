@@ -1,0 +1,233 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+name: Portable Build
+
+on:
+  schedule:
+    - cron: "0 */24 * * *"
+
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Zen release tag (e.g. "1.19b"). Empty = latest.'
+        required: false
+        default: ""
+      force:
+        description: "Force rebuild even if already released"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # needed to create releases
+  actions: read
+
+jobs:
+  # ── Step 1: Check if a new release needs building ─────────────────
+  check:
+    name: Check for new release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      should_build: ${{ steps.decide.outputs.should_build }}
+    steps:
+      - name: Resolve latest upstream tag
+        id: resolve
+        run: |
+          TAG="${{ github.event.inputs.version }}"
+          if [ -z "$TAG" ]; then
+            TAG=$(curl -s https://api.github.com/repos/zen-browser/desktop/releases/latest \
+              | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])")
+          fi
+          echo "Upstream tag: $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Check if already released
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.resolve.outputs.tag }}"
+          FORCE="${{ github.event.inputs.force }}"
+          RELEASE_TAG="portable-${TAG}"
+
+          if [ "$FORCE" = "true" ]; then
+            echo "Force rebuild requested."
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Check if a release with this tag already exists in OUR repo
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${RELEASE_TAG}")
+
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "Release '${RELEASE_TAG}' already exists. Skipping."
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "New release needed for $TAG (tag: ${RELEASE_TAG})"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ── Step 2: Build portable packages ──────────────────────────────
+  portable:
+    name: Portable — ${{ matrix.label }}
+    needs: check
+    if: needs.check.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows x64
+            arch: x86_64
+            goarch: amd64
+            asset: zen.installer.exe
+          - label: Windows ARM64
+            arch: arm64
+            goarch: arm64
+            asset: zen.installer-arm64.exe
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download ${{ matrix.asset }} (${{ needs.check.outputs.tag }})
+        run: |
+          TAG="${{ needs.check.outputs.tag }}"
+          URL="https://github.com/zen-browser/desktop/releases/download/${TAG}/${{ matrix.asset }}"
+          echo "Downloading $URL ..."
+          curl -fSL --retry 3 -o zen-installer.exe "$URL"
+          ls -lh zen-installer.exe
+
+      - name: Install 7z
+        run: sudo apt-get update && sudo apt-get install -y p7zip-full
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Install go-winres
+        run: go install github.com/tc-hib/go-winres@latest
+
+      - name: Generate Windows resources
+        working-directory: build/portable/launcher
+        run: |
+          mkdir -p winres
+          cp "$GITHUB_WORKSPACE/configs/branding/release/logo128.png" winres/icon.png 2>/dev/null || true
+          cat > winres/winres.json << 'MANIFEST'
+          {
+            "RT_GROUP_ICON": {
+              "APP": { "0000": ["icon.png"] }
+            },
+            "RT_MANIFEST": {
+              "#1": {
+                "0000": {
+                  "identity": { "name": "Zen Browser Portable", "version": "1.0.0.0" },
+                  "description": "Zen Browser Portable Launcher",
+                  "minimum-os": "win7",
+                  "execution-level": "as-invoker",
+                  "dpi-awareness": "per-monitor-v2",
+                  "use-common-controls-v6": true
+                }
+              }
+            },
+            "RT_VERSION": {
+              "#1": {
+                "0000": {
+                  "fixed": { "file_version": "1.0.0.0", "product_version": "1.0.0.0" },
+                  "info": {
+                    "0409": {
+                      "CompanyName": "Zen Browser",
+                      "FileDescription": "Zen Browser Portable Launcher",
+                      "InternalName": "zen-portable",
+                      "LegalCopyright": "MPL-2.0",
+                      "OriginalFilename": "zen-portable.exe",
+                      "ProductName": "Zen Browser Portable"
+                    }
+                  }
+                }
+              }
+            }
+          }
+          MANIFEST
+          if [ -f winres/icon.png ]; then
+            go-winres make --arch ${{ matrix.goarch }} || echo "Warning: go-winres failed, building without icon"
+          fi
+
+      - name: Compile launcher (${{ matrix.goarch }})
+        working-directory: build/portable/launcher
+        env:
+          GOOS: windows
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          go build -ldflags="-s -w -H=windowsgui" -o zen-portable.exe .
+          ls -lh zen-portable.exe
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Create portable package
+        run: |
+          python3 build/portable/package.py \
+            --installer   zen-installer.exe \
+            --launcher    build/portable/launcher/zen-portable.exe \
+            --assets-dir  build/portable/assets \
+            --output      "ZenBrowserPortable-${{ matrix.arch }}.zip"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZenBrowserPortable-${{ matrix.arch }}
+          path: "ZenBrowserPortable-${{ matrix.arch }}.zip"
+          retention-days: 5
+
+  # ── Step 3: Create GitHub Release ────────────────────────────────
+  release:
+    name: Publish Release
+    needs: [check, portable]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all portable artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "portable-${{ needs.check.outputs.tag }}"
+          name: "Zen Browser Portable — ${{ needs.check.outputs.tag }}"
+          body: |
+            ## Zen Browser Portable
+
+            Portable build based on [Zen Browser ${{ needs.check.outputs.tag }}](https://github.com/zen-browser/desktop/releases/tag/${{ needs.check.outputs.tag }}).
+
+            ### Downloads
+            | File | Platform |
+            |---|---|
+            | `ZenBrowserPortable-x86_64.zip` | Windows x64 |
+            | `ZenBrowserPortable-arm64.zip` | Windows ARM64 |
+
+            ### Usage
+            1. Download and extract the ZIP
+            2. Double-click **`zen-portable.exe`**
+            3. All your data stays inside the `Data/` folder
+
+            Runs from USB drives — no installation or admin rights needed.
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: false
+          files: |
+            artifacts/ZenBrowserPortable-x86_64/ZenBrowserPortable-x86_64.zip
+            artifacts/ZenBrowserPortable-arm64/ZenBrowserPortable-arm64.zip
