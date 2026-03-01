@@ -37,9 +37,11 @@ def extract_nsis(installer: str, dest: str) -> None:
     print("Extracting NSIS installer with 7z ...")
     r = subprocess.run(["7z", "x", "-y", f"-o{dest}", installer],
                        capture_output=True, text=True)
-    if r.returncode != 0:
-        print(f"7z stderr:\n{r.stderr}", file=sys.stderr)
+    if r.returncode >= 2:
+        print(f"7z failed (exit {r.returncode}):\n{r.stderr}", file=sys.stderr)
         sys.exit(1)
+    if r.returncode == 1:
+        print("  7z warning (non-fatal, continuing)")
 
 
 def extract_tarball(tarball: str, dest: str) -> None:
