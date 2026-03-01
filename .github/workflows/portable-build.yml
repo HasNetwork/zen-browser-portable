@@ -76,7 +76,7 @@ jobs:
     name: Portable — ${{ matrix.label }}
     needs: check
     if: needs.check.outputs.should_build == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
@@ -84,12 +84,14 @@ jobs:
           # ── Windows ──
           - label: Windows x64
             platform: windows
+            runner: ubuntu-latest
             arch: x86_64
             goarch: amd64
             asset: zen.installer.exe
             output: ZenBrowserPortable-windows-x86_64.zip
           - label: Windows ARM64
             platform: windows
+            runner: ubuntu-latest
             arch: arm64
             goarch: arm64
             asset: zen.installer-arm64.exe
@@ -97,17 +99,20 @@ jobs:
           # ── Linux ──
           - label: Linux x64
             platform: linux
+            runner: ubuntu-latest
             arch: x86_64
             asset: zen.linux-x86_64.tar.xz
             output: ZenBrowserPortable-linux-x86_64.tar.gz
           - label: Linux ARM64
             platform: linux
+            runner: ubuntu-latest
             arch: aarch64
             asset: zen.linux-aarch64.tar.xz
             output: ZenBrowserPortable-linux-aarch64.tar.gz
           # ── macOS ──
           - label: macOS Universal
             platform: macos
+            runner: macos-latest
             arch: universal
             asset: zen.macos-universal.dmg
             output: ZenBrowserPortable-macos-universal.tar.gz
@@ -125,7 +130,8 @@ jobs:
           curl -fSL --retry 3 -o "zen-release-asset" "$URL"
           ls -lh zen-release-asset
 
-      - name: Install 7z
+      - name: Install 7z (Windows/Linux only)
+        if: matrix.platform != 'macos'
         run: sudo apt-get update && sudo apt-get install -y p7zip-full
 
       # ── Build Go launcher (Windows only) ──────────────────────────

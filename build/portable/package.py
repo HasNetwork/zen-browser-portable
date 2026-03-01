@@ -50,18 +50,32 @@ def extract_tarball(tarball: str, dest: str) -> None:
 
 
 def extract_dmg(dmg: str, dest: str) -> None:
-    """Extract a macOS DMG using 7z.
-
-    DMGs typically contain a symlink to /Applications which 7z flags as
-    'dangerous' (exit code 1 = warning).  This is expected and harmless —
-    we only fail on exit code 2+ (actual errors).
-    """
-    print("Extracting DMG with 7z ...")
-    r = subprocess.run(["7z", "-snld", "x", "-y", f"-o{dest}", "-xr!Applications", dmg],
-                       capture_output=True, text=True)
-    if r.returncode >= 2:
-        print(f"7z failed (exit {r.returncode}):\n{r.stderr}", file=sys.stderr)
+    """Extract a macOS DMG using hdiutil (native macOS tool)."""
+    print("Mounting DMG with hdiutil ...")
+    # Mount the DMG to a temporary mount point
+    r = subprocess.run(
+        ["hdiutil", "attach", dmg, "-nobrowse", "-readonly", "-mountpoint", f"{dest}/_dmg_mount"],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        print(f"hdiutil failed:\n{r.stderr}", file=sys.stderr)
         sys.exit(1)
+
+    mount_point = f"{dest}/_dmg_mount"
+    try:
+        # Copy contents out of the mounted DMG (skip the /Applications symlink)
+        for item in os.listdir(mount_point):
+            src = os.path.join(mount_point, item)
+            if os.path.islink(src):
+                continue  # skip /Applications symlink
+            dst_item = os.path.join(dest, item)
+            if os.path.isdir(src):
+                shutil.copytree(src, dst_item, symlinks=True)
+            else:
+                shutil.copy2(src, dst_item)
+    finally:
+        # Always detach
+        subprocess.run(["hdiutil", "detach", mount_point, "-quiet"], capture_output=True)
 
 
 # ── Finders ─────────────────────────────────────────────────────────
