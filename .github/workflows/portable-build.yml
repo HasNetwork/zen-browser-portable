@@ -21,11 +21,11 @@ on:
         default: false
 
 permissions:
-  contents: write   # needed to create releases
+  contents: write
   actions: read
 
 jobs:
-  # ── Step 1: Check if a new release needs building ─────────────────
+  # ── Step 1: Check for new release ─────────────────────────────────
   check:
     name: Check for new release
     runs-on: ubuntu-latest
@@ -59,7 +59,6 @@ jobs:
             exit 0
           fi
 
-          # Check if a release with this tag already exists in OUR repo
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "Authorization: Bearer $GH_TOKEN" \
             "https://api.github.com/repos/${{ github.repository }}/releases/tags/${RELEASE_TAG}")
@@ -68,7 +67,7 @@ jobs:
             echo "Release '${RELEASE_TAG}' already exists. Skipping."
             echo "should_build=false" >> "$GITHUB_OUTPUT"
           else
-            echo "New release needed for $TAG (tag: ${RELEASE_TAG})"
+            echo "New release needed for $TAG"
             echo "should_build=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -82,39 +81,66 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # ── Windows ──
           - label: Windows x64
+            platform: windows
             arch: x86_64
             goarch: amd64
             asset: zen.installer.exe
+            output: ZenBrowserPortable-windows-x86_64.zip
           - label: Windows ARM64
+            platform: windows
             arch: arm64
             goarch: arm64
             asset: zen.installer-arm64.exe
+            output: ZenBrowserPortable-windows-arm64.zip
+          # ── Linux ──
+          - label: Linux x64
+            platform: linux
+            arch: x86_64
+            asset: zen.linux-x86_64.tar.xz
+            output: ZenBrowserPortable-linux-x86_64.tar.gz
+          - label: Linux ARM64
+            platform: linux
+            arch: aarch64
+            asset: zen.linux-aarch64.tar.xz
+            output: ZenBrowserPortable-linux-aarch64.tar.gz
+          # ── macOS ──
+          - label: macOS Universal
+            platform: macos
+            arch: universal
+            asset: zen.macos-universal.dmg
+            output: ZenBrowserPortable-macos-universal.tar.gz
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ── Download upstream release ─────────────────────────────────
       - name: Download ${{ matrix.asset }} (${{ needs.check.outputs.tag }})
         run: |
           TAG="${{ needs.check.outputs.tag }}"
           URL="https://github.com/zen-browser/desktop/releases/download/${TAG}/${{ matrix.asset }}"
           echo "Downloading $URL ..."
-          curl -fSL --retry 3 -o zen-installer.exe "$URL"
-          ls -lh zen-installer.exe
+          curl -fSL --retry 3 -o "zen-release-asset" "$URL"
+          ls -lh zen-release-asset
 
       - name: Install 7z
         run: sudo apt-get update && sudo apt-get install -y p7zip-full
 
+      # ── Build Go launcher (Windows only) ──────────────────────────
       - name: Setup Go
+        if: matrix.platform == 'windows'
         uses: actions/setup-go@v5
         with:
           go-version: "1.22"
 
       - name: Install go-winres
+        if: matrix.platform == 'windows'
         run: go install github.com/tc-hib/go-winres@latest
 
       - name: Generate Windows resources
+        if: matrix.platform == 'windows'
         working-directory: build/portable/launcher
         run: |
           mkdir -p winres
@@ -156,10 +182,11 @@ jobs:
           }
           MANIFEST
           if [ -f winres/icon.png ]; then
-            go-winres make --arch ${{ matrix.goarch }} || echo "Warning: go-winres failed, building without icon"
+            go-winres make --arch ${{ matrix.goarch }} || echo "Warning: go-winres failed"
           fi
 
       - name: Compile launcher (${{ matrix.goarch }})
+        if: matrix.platform == 'windows'
         working-directory: build/portable/launcher
         env:
           GOOS: windows
@@ -169,24 +196,47 @@ jobs:
           go build -ldflags="-s -w -H=windowsgui" -o zen-portable.exe .
           ls -lh zen-portable.exe
 
+      # ── Package ───────────────────────────────────────────────────
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.x"
 
-      - name: Create portable package
+      - name: Create portable package (Windows)
+        if: matrix.platform == 'windows'
         run: |
           python3 build/portable/package.py \
-            --installer   zen-installer.exe \
+            --installer   zen-release-asset \
             --launcher    build/portable/launcher/zen-portable.exe \
             --assets-dir  build/portable/assets \
-            --output      "ZenBrowserPortable-${{ matrix.arch }}.zip"
+            --output      "${{ matrix.output }}"
 
+      - name: Create portable package (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          python3 build/portable/package.py \
+            --tarball        zen-release-asset \
+            --shell-launcher build/portable/launcher/zen-portable.sh \
+            --user-js        build/portable/launcher/defaults/user.js \
+            --assets-dir     build/portable/assets \
+            --output         "${{ matrix.output }}"
+
+      - name: Create portable package (macOS)
+        if: matrix.platform == 'macos'
+        run: |
+          python3 build/portable/package.py \
+            --dmg            zen-release-asset \
+            --shell-launcher build/portable/launcher/zen-portable.sh \
+            --user-js        build/portable/launcher/defaults/user.js \
+            --assets-dir     build/portable/assets \
+            --output         "${{ matrix.output }}"
+
+      # ── Upload ────────────────────────────────────────────────────
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ZenBrowserPortable-${{ matrix.arch }}
-          path: "ZenBrowserPortable-${{ matrix.arch }}.zip"
+          name: ${{ matrix.output }}
+          path: ${{ matrix.output }}
           retention-days: 5
 
   # ── Step 3: Create GitHub Release ────────────────────────────────
@@ -195,7 +245,7 @@ jobs:
     needs: [check, portable]
     runs-on: ubuntu-latest
     steps:
-      - name: Download all portable artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -214,20 +264,27 @@ jobs:
             Portable build based on [Zen Browser ${{ needs.check.outputs.tag }}](https://github.com/zen-browser/desktop/releases/tag/${{ needs.check.outputs.tag }}).
 
             ### Downloads
+
             | File | Platform |
             |---|---|
-            | `ZenBrowserPortable-x86_64.zip` | Windows x64 |
-            | `ZenBrowserPortable-arm64.zip` | Windows ARM64 |
+            | `ZenBrowserPortable-windows-x86_64.zip` | 🪟 Windows x64 |
+            | `ZenBrowserPortable-windows-arm64.zip` | 🪟 Windows ARM64 |
+            | `ZenBrowserPortable-linux-x86_64.tar.gz` | 🐧 Linux x64 |
+            | `ZenBrowserPortable-linux-aarch64.tar.gz` | 🐧 Linux ARM64 |
+            | `ZenBrowserPortable-macos-universal.tar.gz` | 🍎 macOS (Intel + Apple Silicon) |
 
             ### Usage
-            1. Download and extract the ZIP
-            2. Double-click **`zen-portable.exe`**
+            1. Download and extract the archive for your platform
+            2. Run **`zen-portable.exe`** (Windows) or **`./zen-portable`** (Linux/macOS)
             3. All your data stays inside the `Data/` folder
 
-            Runs from USB drives — no installation or admin rights needed.
+            No installation or admin rights needed. Works from USB drives.
           draft: false
           prerelease: false
           fail_on_unmatched_files: false
           files: |
-            artifacts/ZenBrowserPortable-x86_64/ZenBrowserPortable-x86_64.zip
-            artifacts/ZenBrowserPortable-arm64/ZenBrowserPortable-arm64.zip
+            artifacts/ZenBrowserPortable-windows-x86_64.zip/ZenBrowserPortable-windows-x86_64.zip
+            artifacts/ZenBrowserPortable-windows-arm64.zip/ZenBrowserPortable-windows-arm64.zip
+            artifacts/ZenBrowserPortable-linux-x86_64.tar.gz/ZenBrowserPortable-linux-x86_64.tar.gz
+            artifacts/ZenBrowserPortable-linux-aarch64.tar.gz/ZenBrowserPortable-linux-aarch64.tar.gz
+            artifacts/ZenBrowserPortable-macos-universal.tar.gz/ZenBrowserPortable-macos-universal.tar.gz

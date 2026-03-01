@@ -2,25 +2,14 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-.dotbuild/
-engine/
-firefox-*/
-node_modules/
-.surfer/
+# Build artifacts
+build/portable/launcher/zen-portable.exe
+build/portable/launcher/winres/
 
-__pycache__/
-dist/
-
-windsign-temp/
-venv/
-
-!firefox-cache/
-win-cross/
-
-!firefox-patches/
-target/
+# OS / editor
 .vscode/
-
-locales/firefox-l10n/
-
-!src/toolkit/themes/shared/design-system/dist/
+.idea/
+*.swp
+*~
+Thumbs.db
+.DS_Store

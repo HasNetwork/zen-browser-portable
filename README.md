@@ -12,7 +12,7 @@
 [![Portable Build](https://github.com/HasNetwork/zen-browser-portable/actions/workflows/portable-build.yml/badge.svg)](https://github.com/HasNetwork/zen-browser-portable/actions/workflows/portable-build.yml)
 [![Upstream](https://img.shields.io/badge/upstream-zen--browser%2Fdesktop-purple)](https://github.com/zen-browser/desktop)
 
-An **unofficial portable build** of [Zen Browser](https://zen-browser.app) for Windows. Run it from a USB drive, external SSD, or any folder — no installation, no admin rights, no data left behind.
+An **unofficial portable build** of [Zen Browser](https://zen-browser.app) for Windows, Linux, and macOS. Run it from a USB drive, external SSD, or any folder — no installation, no admin rights, no data left behind.
 
 <br>
 
@@ -22,16 +22,31 @@ An **unofficial portable build** of [Zen Browser](https://zen-browser.app) for W
 
 > Download the latest portable build from [**Releases**](https://github.com/HasNetwork/zen-browser-portable/releases/latest).
 
-| File | Platform |
-|---|---|
-| `ZenBrowserPortable-x86_64.zip` | Windows x64 (Intel/AMD) |
-| `ZenBrowserPortable-arm64.zip` | Windows ARM64 (Snapdragon) |
+| File                                        | Platform                         |
+| ------------------------------------------- | -------------------------------- |
+| `ZenBrowserPortable-windows-x86_64.zip`     | 🪟 Windows x64 (Intel/AMD)       |
+| `ZenBrowserPortable-windows-arm64.zip`      | 🪟 Windows ARM64 (Snapdragon)    |
+| `ZenBrowserPortable-linux-x86_64.tar.gz`    | 🐧 Linux x64                     |
+| `ZenBrowserPortable-linux-aarch64.tar.gz`   | 🐧 Linux ARM64                   |
+| `ZenBrowserPortable-macos-universal.tar.gz` | 🍎 macOS (Intel + Apple Silicon) |
 
 ## 🚀 Getting Started
 
-1. **Download** the ZIP for your platform from [Releases](https://github.com/HasNetwork/zen-browser-portable/releases/latest)
-2. **Extract** the ZIP to any folder (local drive, USB, external SSD, etc.)
-3. **Double-click** `zen-portable.exe` — that's it!
+**Windows:**
+
+1. Download the `.zip` → Extract → Double-click **`zen-portable.exe`**
+
+**Linux / macOS:**
+
+1. Download the `.tar.gz` → Extract → Run **`./zen-portable`**
+
+```bash
+# Linux / macOS
+tar xzf ZenBrowserPortable-linux-x86_64.tar.gz
+cd ZenBrowserPortable
+chmod +x zen-portable    # should already be executable
+./zen-portable
+```
 
 All your data (bookmarks, history, passwords, extensions) is stored inside the `Data/` folder. Move the entire `ZenBrowserPortable/` folder anywhere and everything comes with it.
 
@@ -39,13 +54,14 @@ All your data (bookmarks, history, passwords, extensions) is stored inside the `
 
 ```
 ZenBrowserPortable/
-├── zen-portable.exe       ← Launch this!
+├── zen-portable(.exe)     ← Launch this!
 ├── portable.ini           ← Portable mode marker
 ├── README.txt             ← Quick reference
-├── App/                   ← Zen Browser engine (do not modify)
-│   ├── zen.exe
-│   ├── xul.dll
-│   └── ...
+├── defaults/              ← Default preferences (Linux/macOS)
+│   └── user.js
+├── App/                   ← Browser engine (do not modify)
+│   ├── zen(.exe)          ← Windows / Linux
+│   └── Zen Browser.app/   ← macOS
 └── Data/                  ← Your personal data (portable)
     ├── profile/           ← Bookmarks, history, extensions, settings
     ├── temp/              ← Temporary files (redirected here)
@@ -54,25 +70,25 @@ ZenBrowserPortable/
 
 ## 💡 Key Features
 
-| Feature | Details |
-|---|---|
-| **True portability** | Profile, temp, and cache all live inside the portable folder |
-| **USB / pendrive ready** | Drive letter changes handled automatically |
-| **Zero footprint** | No files left on the host PC (temp redirected locally) |
-| **No admin required** | Runs from any user-writable folder |
-| **Coexists with installed Zen** | Uses `--no-remote` — won't interfere with an existing installation |
-| **Auto-updated builds** | New portable builds are published automatically when Zen releases a new version |
+| Feature                         | Details                                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------- |
+| **True portability**            | Profile, temp, and cache all live inside the portable folder                    |
+| **Cross-platform**              | Windows, Linux, and macOS                                                       |
+| **USB / pendrive ready**        | Drive letter and mount point changes handled automatically                      |
+| **Zero footprint**              | No files left on the host machine                                               |
+| **No admin required**           | Runs from any user-writable folder                                              |
+| **Coexists with installed Zen** | Uses `--no-remote` — won't interfere with an existing installation              |
+| **Auto-updated builds**         | New portable builds are published automatically when Zen releases a new version |
 
 ## 🔄 Updating
 
 1. Close Zen Browser completely
-2. Download the latest ZIP from [Releases](https://github.com/HasNetwork/zen-browser-portable/releases/latest)
+2. Download the latest archive from [Releases](https://github.com/HasNetwork/zen-browser-portable/releases/latest)
 3. Delete the contents of the `App/` folder
-4. Extract the new ZIP's `App/` folder into your existing one
+4. Extract the new archive's `App/` folder into your existing one
 5. Your `Data/` folder (bookmarks, history, etc.) is preserved
 
-> [!TIP]
-> Auto-updates are disabled in portable mode. Check this repo's [Releases](https://github.com/HasNetwork/zen-browser-portable/releases) page for new versions.
+> **Tip:** Auto-updates are disabled in portable mode. Check this repo's [Releases](https://github.com/HasNetwork/zen-browser-portable/releases) page for new versions.
 
 ## ⚙️ Portable Mode Defaults
 
@@ -88,37 +104,46 @@ You can change any of these in `about:config` or by editing `Data/profile/user.j
 
 ## 🏗️ How It Works
 
-The portable launcher (`zen-portable.exe`) is a small Go program (~2 MB) that:
+**Windows:** The launcher (`zen-portable.exe`) is a small Go program (~2 MB) that resolves its own directory, redirects TEMP/TMP, and launches `zen.exe --profile Data/profile --no-remote`.
 
-1. Resolves its own directory at runtime (handles drive letter changes)
-2. Creates `Data/profile/`, `Data/temp/`, and `Data/cache/` if missing
-3. Seeds a `user.js` with portable-mode preferences on first run
-4. Redirects `TEMP`/`TMP` environment variables into `Data/temp/`
-5. Launches `App/zen.exe --profile Data/profile --no-remote`
+**Linux / macOS:** The launcher (`zen-portable`) is a bash script that does the same — finds the `zen` binary or `.app` bundle in `App/`, sets environment variables, and launches with `--profile`.
 
-No modifications are made to the Zen Browser engine itself — it's the exact same build from the [official releases](https://github.com/zen-browser/desktop/releases).
+No modifications are made to the Zen Browser engine — it's the exact same build from the [official releases](https://github.com/zen-browser/desktop/releases).
 
 ## 🔨 Building From Source
 
-**Requirements:** Go, Python 3, 7-Zip
+**Requirements:** Go (Windows only), Python 3, 7-Zip
 
 ```bash
-# 1. Compile the portable launcher
+# Windows: compile the Go launcher
 cd build/portable/launcher
 go build -ldflags="-s -w -H=windowsgui" -o zen-portable.exe .
 
-# 2. Download the latest Zen installer from GitHub releases
-#    (zen.installer.exe or zen.installer-arm64.exe)
-
-# 3. Package everything
+# Package (Windows)
 python build/portable/package.py \
   --installer zen.installer.exe \
   --launcher  build/portable/launcher/zen-portable.exe \
   --assets-dir build/portable/assets \
-  --output ZenBrowserPortable-x86_64.zip
+  --output ZenBrowserPortable-windows-x86_64.zip
+
+# Package (Linux)
+python build/portable/package.py \
+  --tarball zen.linux-x86_64.tar.xz \
+  --shell-launcher build/portable/launcher/zen-portable.sh \
+  --user-js build/portable/launcher/defaults/user.js \
+  --assets-dir build/portable/assets \
+  --output ZenBrowserPortable-linux-x86_64.tar.gz
+
+# Package (macOS — requires 7z for DMG extraction)
+python build/portable/package.py \
+  --dmg zen.macos-universal.dmg \
+  --shell-launcher build/portable/launcher/zen-portable.sh \
+  --user-js build/portable/launcher/defaults/user.js \
+  --assets-dir build/portable/assets \
+  --output ZenBrowserPortable-macos-universal.tar.gz
 ```
 
-Or just push to GitHub and the [Portable Build workflow](.github/workflows/portable-build.yml) will handle everything automatically.
+Or just push to GitHub — the [Portable Build workflow](.github/workflows/portable-build.yml) handles everything automatically.
 
 ## 📋 Upstream
 
@@ -126,7 +151,6 @@ This project is a fork of [zen-browser/desktop](https://github.com/zen-browser/d
 
 - **Zen Browser**: [zen-browser.app](https://zen-browser.app)
 - **Upstream repo**: [zen-browser/desktop](https://github.com/zen-browser/desktop)
-- **Firefox version**: `148.0`
 
 ## 📄 License
 

@@ -1,9 +1,0 @@
-diff --git a/browser/base/content/browser-sets.inc b/browser/base/content/browser-sets.inc
-index df768aaa77a6986260da5052ed14c8403d48de6b..a30e3a2784a6215c959d23802b5c2c966f89ca10 100644
---- a/browser/base/content/browser-sets.inc
-+++ b/browser/base/content/browser-sets.inc
-@@ -414,3 +414,4 @@
-          internal="true"/>
- #endif
-   </keyset>
-+#include zen-keysets.inc.xhtml
