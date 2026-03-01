@@ -35,7 +35,7 @@ import zipfile
 def extract_nsis(installer: str, dest: str) -> None:
     """Extract a Windows NSIS installer using 7z."""
     print("Extracting NSIS installer with 7z ...")
-    r = subprocess.run(["7z", "-snld", "x", "-y", f"-o{dest}", installer],
+    r = subprocess.run(["7z", "-snld", "x", "-y", f"-o{dest}", "-xr!Applications", installer],
                        capture_output=True, text=True)
     if r.returncode >= 2:
         print(f"7z failed (exit {r.returncode}):\n{r.stderr}", file=sys.stderr)
@@ -57,7 +57,7 @@ def extract_dmg(dmg: str, dest: str) -> None:
     we only fail on exit code 2+ (actual errors).
     """
     print("Extracting DMG with 7z ...")
-    r = subprocess.run(["7z", "-snld", "x", "-y", f"-o{dest}", dmg],
+    r = subprocess.run(["7z", "-snld", "x", "-y", f"-o{dest}", "-xr!Applications", dmg],
                        capture_output=True, text=True)
     if r.returncode >= 2:
         print(f"7z failed (exit {r.returncode}):\n{r.stderr}", file=sys.stderr)
