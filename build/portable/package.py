@@ -50,13 +50,20 @@ def extract_tarball(tarball: str, dest: str) -> None:
 
 
 def extract_dmg(dmg: str, dest: str) -> None:
-    """Extract a macOS DMG using 7z."""
+    """Extract a macOS DMG using 7z.
+
+    DMGs typically contain a symlink to /Applications which 7z flags as
+    'dangerous' (exit code 1 = warning).  This is expected and harmless —
+    we only fail on exit code 2+ (actual errors).
+    """
     print("Extracting DMG with 7z ...")
     r = subprocess.run(["7z", "x", "-y", f"-o{dest}", dmg],
                        capture_output=True, text=True)
-    if r.returncode != 0:
-        print(f"7z stderr:\n{r.stderr}", file=sys.stderr)
+    if r.returncode >= 2:
+        print(f"7z failed (exit {r.returncode}):\n{r.stderr}", file=sys.stderr)
         sys.exit(1)
+    if r.returncode == 1:
+        print("  7z warning (harmless): dangerous symlink to /Applications ignored")
 
 
 # ── Finders ─────────────────────────────────────────────────────────
