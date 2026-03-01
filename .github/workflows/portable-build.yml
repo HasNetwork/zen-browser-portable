@@ -6,7 +6,7 @@ name: Portable Build
 
 on:
   schedule:
-    - cron: "0 */24 * * *"
+    - cron: "0 */12 * * *"
 
   workflow_dispatch:
     inputs:
