@@ -5,23 +5,18 @@ Build Zen Browser Portable in PortableApps.com Format (PAF).
 This script:
   1. Sets up the PAF directory structure
   2. Extracts Zen Browser from the NSIS installer
-  3. Copies PAF config files (appinfo.ini, launcher.ini, etc.)
-  4. Generates icons from the Zen logo
-  5. Runs the PAL Generator to compile ZenBrowserPortable.exe
-  6. Runs the PA.c Installer to create the final .paf.exe
+  3. Copies PAF config files (appinfo.ini, launcher.ini, icons, etc.)
+  4. Generates icons from the Zen logo using ImageMagick
+  5. Compiles ZenBrowserPortable.exe from launcher.nsi using makensis
+  6. Compiles the final .paf.exe from installer.nsi using makensis
 
 Usage:
     python build_paf.py \
         --installer zen.installer.exe \
         --paf-template build/portable/paf \
-        --icon configs/branding/release/logo128.png \
-        --pal-dir /path/to/PortableApps.comLauncher \
-        --pai-dir /path/to/PortableApps.comInstaller \
-        --output ZenBrowserPortable_1.0.0.paf.exe
-
-This Source Code Form is subject to the terms of the Mozilla Public
-License, v. 2.0. If a copy of the MPL was not distributed with this
-file, You can obtain one at http://mozilla.org/MPL/2.0/.
+        --icon logo128.png \
+        --version 1.19b \
+        --output ZenBrowserPortable_1.19b.paf.exe
 """
 
 import argparse
@@ -48,18 +43,23 @@ def find_file(search_dir: str, filename: str) -> str | None:
     return None
 
 
-def extract_nsis(installer: str, dest: str) -> None:
-    """Extract a Windows NSIS installer using 7z."""
-    print("Extracting NSIS installer with 7z ...")
-    r = subprocess.run(["7z", "x", "-y", f"-o{dest}", installer],
-                       capture_output=True, text=True)
-    if r.returncode >= 2:
-        print(f"7z failed (exit {r.returncode}):\n{r.stderr}", file=sys.stderr)
+def run(cmd: list[str], label: str) -> None:
+    """Run a command, print output, and exit on failure."""
+    print(f"  → {' '.join(cmd)}")
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.stdout.strip():
+        print(r.stdout.strip())
+    if r.returncode != 0:
+        # For 7z, exit code 1 = warnings (OK to continue)
+        if cmd[0] in ("7z", "7z.exe") and r.returncode == 1:
+            print(f"  {label}: 7z warning (exit 1), continuing...")
+            return
+        print(f"ERROR in {label} (exit {r.returncode}):\n{r.stderr}", file=sys.stderr)
         sys.exit(1)
 
 
 def generate_icons(source_png: str, appinfo_dir: str) -> None:
-    """Generate required PAF icon sizes from a source PNG using magick."""
+    """Generate required PAF icon sizes from a source PNG using ImageMagick."""
     sizes = {
         "appicon_16.png": 16,
         "appicon_32.png": 32,
@@ -67,30 +67,20 @@ def generate_icons(source_png: str, appinfo_dir: str) -> None:
         "appicon_128.png": 128,
         "appicon_256.png": 256,
     }
+
     for filename, size in sizes.items():
         out = os.path.join(appinfo_dir, filename)
-        r = subprocess.run(
-            ["magick", source_png, "-resize", f"{size}x{size}", out],
-            capture_output=True, text=True,
-        )
-        if r.returncode != 0:
-            print(f"Warning: Failed to generate {filename}: {r.stderr}")
-        else:
-            print(f"  Generated {filename} ({size}x{size})")
+        run(["magick", source_png, "-resize", f"{size}x{size}", out],
+            f"generate {filename}")
+        print(f"  ✓ {filename} ({size}x{size})")
 
     # Generate ICO with multiple sizes
     ico_path = os.path.join(appinfo_dir, "appicon.ico")
-    ico_sizes = [16, 32, 48, 256]
-    args = ["magick", source_png]
-    for s in ico_sizes:
-        args += ["(", "-clone", "0", "-resize", f"{s}x{s}", ")"]
-    args += ["-delete", "0", ico_path]
-    r = subprocess.run(args, capture_output=True, text=True)
-    if r.returncode != 0:
-        print(f"Warning: Failed to generate appicon.ico: {r.stderr}")
-        # Fallback: just copy the PNG as-is (won't be a valid ICO but won't crash)
-    else:
-        print(f"  Generated appicon.ico")
+    run(["magick", source_png,
+         "-define", "icon:auto-resize=256,48,32,16",
+         ico_path],
+        "generate appicon.ico")
+    print(f"  ✓ appicon.ico (multi-size)")
 
 
 def build_paf(args: argparse.Namespace) -> None:
@@ -99,32 +89,24 @@ def build_paf(args: argparse.Namespace) -> None:
         app_dir = os.path.join(paf_root, "App")
         zen_dir = os.path.join(app_dir, "zen")
         appinfo_dir = os.path.join(app_dir, "AppInfo")
-        data_dir = os.path.join(paf_root, "Data")
         staging = os.path.join(tmp, "_staging")
 
-        # ── Create directory structure ──────────────────────────────
-        for d in [zen_dir, appinfo_dir, data_dir, os.path.join(data_dir, "profile"),
-                  os.path.join(data_dir, "temp"), staging]:
-            os.makedirs(d, exist_ok=True)
-
-        # ── Copy PAF template files ─────────────────────────────────
+        # ── 1. Copy PAF template files ──────────────────────────────
+        print("\n[1/6] Copying PAF template ...")
         template = args.paf_template
-        for item in os.listdir(template):
-            src = os.path.join(template, item)
-            dst = os.path.join(paf_root, item)
-            if os.path.isdir(src):
-                shutil.copytree(src, dst, dirs_exist_ok=True)
-            else:
-                shutil.copy2(src, dst)
-        print("Copied PAF template files")
+        shutil.copytree(template, paf_root, dirs_exist_ok=True)
 
-        # ── Extract browser from NSIS installer ─────────────────────
-        extract_nsis(args.installer, staging)
+        # ── 2. Extract browser from NSIS installer ──────────────────
+        print("\n[2/6] Extracting Zen Browser ...")
+        os.makedirs(staging, exist_ok=True)
+        run(["7z", "x", "-y", f"-o{staging}", args.installer], "NSIS extraction")
+
         zen_root = find_file(staging, "zen.exe")
         if not zen_root:
             print("ERROR: zen.exe not found after extraction!", file=sys.stderr)
             sys.exit(1)
 
+        os.makedirs(zen_dir, exist_ok=True)
         for item in os.listdir(zen_root):
             s = os.path.join(zen_root, item)
             d = os.path.join(zen_dir, item)
@@ -132,9 +114,8 @@ def build_paf(args: argparse.Namespace) -> None:
                 shutil.copytree(s, d)
             else:
                 shutil.copy2(s, d)
-        print(f"Extracted Zen Browser to App/zen/")
 
-        # ── Remove installer-only files ─────────────────────────────
+        # Remove installer-only files
         for unwanted in UNWANTED_FILES:
             target = os.path.join(zen_dir, unwanted)
             if os.path.exists(target):
@@ -142,66 +123,105 @@ def build_paf(args: argparse.Namespace) -> None:
                     shutil.rmtree(target)
                 else:
                     os.remove(target)
-                print(f"  Removed: {unwanted}")
 
-        # ── Generate icons ──────────────────────────────────────────
+        print(f"  ✓ Extracted to App/zen/ ({len(os.listdir(zen_dir))} items)")
+
+        # ── 3. Generate icons ───────────────────────────────────────
+        print("\n[3/6] Generating icons ...")
         if args.icon and os.path.isfile(args.icon):
-            print("Generating PAF icons ...")
             generate_icons(args.icon, appinfo_dir)
         else:
-            print("Warning: No icon provided, PAF icons not generated")
-
-        # ── Run PAL Generator ───────────────────────────────────────
-        if args.pal_dir:
-            pal_gen = os.path.join(args.pal_dir, "PortableApps.comLauncherGenerator.exe")
-            if os.path.isfile(pal_gen):
-                print("Running PortableApps.com Launcher Generator ...")
-                r = subprocess.run([pal_gen, paf_root],
-                                   capture_output=True, text=True, timeout=120)
-                if r.returncode != 0:
-                    print(f"PAL Generator output:\n{r.stdout}\n{r.stderr}")
-                    print("Warning: PAL Generator failed, falling back to template launcher")
-                else:
-                    print("PAL Generator completed successfully")
+            # Try to get icon from the browser itself
+            browser_icon = os.path.join(zen_dir, "browser", "chrome", "icons", "default", "default128.png")
+            if os.path.isfile(browser_icon):
+                generate_icons(browser_icon, appinfo_dir)
             else:
-                print(f"Warning: PAL Generator not found at {pal_gen}")
+                print("  ⚠ No icon source found, skipping icon generation")
 
-        # ── Run PA.c Installer ──────────────────────────────────────
-        if args.pai_dir:
-            pai_gen = os.path.join(args.pai_dir, "PortableApps.comInstaller.exe")
-            if os.path.isfile(pai_gen):
-                print("Running PortableApps.com Installer ...")
-                r = subprocess.run([pai_gen, paf_root],
-                                   capture_output=True, text=True, timeout=300)
-                if r.returncode != 0:
-                    print(f"PA.c Installer output:\n{r.stdout}\n{r.stderr}")
-                    print("Warning: PA.c Installer failed")
-                else:
-                    print("PA.c Installer completed successfully")
+        # ── 4. Update appinfo.ini version ───────────────────────────
+        print("\n[4/6] Updating version info ...")
+        appinfo_path = os.path.join(appinfo_dir, "appinfo.ini")
+        if os.path.isfile(appinfo_path):
+            with open(appinfo_path, "r") as f:
+                content = f.read()
+            # Update PackageVersion (needs 4-part dotted format)
+            version_parts = args.version.lstrip("v").replace("-", ".").split(".")
+            # Pad to 4 parts
+            while len(version_parts) < 4:
+                version_parts.append("0")
+            pkg_version = ".".join(version_parts[:4])
+            # Replace only numeric parts (strip alpha suffixes for PackageVersion)
+            pkg_clean = []
+            for p in version_parts[:4]:
+                nums = ""
+                for c in p:
+                    if c.isdigit():
+                        nums += c
+                    else:
+                        break
+                pkg_clean.append(nums if nums else "0")
+            pkg_version = ".".join(pkg_clean)
 
-                # Find the generated .paf.exe
-                for f in os.listdir(tmp):
-                    if f.endswith(".paf.exe"):
-                        src_paf = os.path.join(tmp, f)
-                        shutil.move(src_paf, args.output)
-                        size_mb = os.path.getsize(args.output) / 1048576
-                        print(f"Done! {args.output} ({size_mb:.1f} MB)")
-                        return
+            content = content.replace("PackageVersion=1.0.0.0", f"PackageVersion={pkg_version}")
+            content = content.replace("DisplayVersion=1.0.0", f"DisplayVersion={args.version}")
+            with open(appinfo_path, "w") as f:
+                f.write(content)
+            print(f"  ✓ PackageVersion={pkg_version}, DisplayVersion={args.version}")
+
+        # ── 5. Compile ZenBrowserPortable.exe (launcher) ────────────
+        print("\n[5/6] Compiling launcher (NSIS) ...")
+        launcher_nsi = os.path.join(paf_root, "launcher.nsi")
+        if os.path.isfile(launcher_nsi):
+            orig_dir = os.getcwd()
+            os.chdir(paf_root)
+            run(["makensis", "/V2", launcher_nsi], "launcher compilation")
+            os.chdir(orig_dir)
+            launcher_exe = os.path.join(paf_root, "ZenBrowserPortable.exe")
+            if os.path.isfile(launcher_exe):
+                size_kb = os.path.getsize(launcher_exe) // 1024
+                print(f"  ✓ ZenBrowserPortable.exe ({size_kb} KB)")
             else:
-                print(f"Warning: PA.c Installer not found at {pai_gen}")
-
-        # ── Fallback: create ZIP if installer tools unavailable ─────
-        print("Falling back to ZIP output ...")
-        shutil.make_archive(args.output.replace(".paf.exe", "").replace(".zip", ""),
-                            "zip", tmp, "ZenBrowserPortable")
-        output_zip = args.output.replace(".paf.exe", ".zip")
-        if not os.path.isfile(output_zip):
-            output_zip = args.output.replace(".paf.exe", "") + ".zip"
-        if os.path.isfile(output_zip):
-            size_mb = os.path.getsize(output_zip) / 1048576
-            print(f"Done! {output_zip} ({size_mb:.1f} MB)")
+                print("  ⚠ Launcher exe not found after compilation")
+            # Remove the .nsi source from the final package
+            os.remove(launcher_nsi)
         else:
-            print("Warning: Could not create output archive")
+            print("  ⚠ launcher.nsi not found, skipping")
+
+        # ── 6. Compile .paf.exe (installer) ─────────────────────────
+        print("\n[6/6] Compiling installer (NSIS) ...")
+        installer_nsi = os.path.join(paf_root, "installer.nsi")
+        output_path = os.path.abspath(args.output)
+        if os.path.isfile(installer_nsi):
+            orig_dir = os.getcwd()
+            os.chdir(paf_root)
+            run(["makensis", "/V2",
+                 f"/DVERSION={args.version}",
+                 f"/DPACKAGE_DIR={paf_root}",
+                 f"/DOUTPUT={output_path}",
+                 installer_nsi],
+                "installer compilation")
+            os.chdir(orig_dir)
+            # Remove the .nsi source from package
+            os.remove(installer_nsi)
+        else:
+            print("  ⚠ installer.nsi not found, falling back to ZIP")
+
+        # ── Check result ────────────────────────────────────────────
+        if os.path.isfile(output_path):
+            size_mb = os.path.getsize(output_path) / 1048576
+            print(f"\n✅ Done! {output_path} ({size_mb:.1f} MB)")
+        else:
+            # Fallback to ZIP
+            print("\n  Falling back to ZIP output ...")
+            zip_path = output_path.replace(".paf.exe", "")
+            shutil.make_archive(zip_path, "zip", tmp, "ZenBrowserPortable")
+            final = zip_path + ".zip"
+            if os.path.isfile(final):
+                size_mb = os.path.getsize(final) / 1048576
+                print(f"\n✅ Done! {final} ({size_mb:.1f} MB)")
+            else:
+                print("\n❌ Failed to create output!")
+                sys.exit(1)
 
 
 def main() -> None:
@@ -209,8 +229,7 @@ def main() -> None:
     p.add_argument("--installer", required=True, help="Windows NSIS installer (.exe)")
     p.add_argument("--paf-template", required=True, help="PAF template directory")
     p.add_argument("--icon", help="Source PNG for icon generation")
-    p.add_argument("--pal-dir", help="Path to PortableApps.com Launcher")
-    p.add_argument("--pai-dir", help="Path to PortableApps.com Installer")
+    p.add_argument("--version", default="0.0.0", help="Version string (e.g. 1.19b)")
     p.add_argument("--output", required=True, help="Output .paf.exe path")
     args = p.parse_args()
 

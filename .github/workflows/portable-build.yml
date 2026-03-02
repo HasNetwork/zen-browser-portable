@@ -268,28 +268,12 @@ jobs:
         shell: powershell
         run: |
           choco install nsis 7zip imagemagick -y --no-progress
-          refreshenv
 
-      - name: Download PortableApps.com Launcher
-        shell: powershell
+      - name: Add NSIS to PATH
+        shell: bash
         run: |
-          $palUrl = "https://downloads.sourceforge.net/portableapps/PortableApps.com_Launcher_2.2.9.paf.exe"
-          Invoke-WebRequest -Uri $palUrl -OutFile "PAL.paf.exe" -UseBasicParsing
-          # Run the NSIS installer silently to extract
-          $dest = "$PWD\PAL"
-          Start-Process -Wait -FilePath ".\PAL.paf.exe" -ArgumentList "/S", "/D=$dest"
-          Write-Host "PAL installed to $dest"
-          Get-ChildItem $dest -Recurse -Depth 1 | Select-Object -First 20
-
-      - name: Download PortableApps.com Installer
-        shell: powershell
-        run: |
-          $paiUrl = "https://downloads.sourceforge.net/portableapps/PortableApps.com_Installer_3.9.10.paf.exe"
-          Invoke-WebRequest -Uri $paiUrl -OutFile "PAI.paf.exe" -UseBasicParsing
-          $dest = "$PWD\PAI"
-          Start-Process -Wait -FilePath ".\PAI.paf.exe" -ArgumentList "/S", "/D=$dest"
-          Write-Host "PAI installed to $dest"
-          Get-ChildItem $dest -Recurse -Depth 1 | Select-Object -First 20
+          echo "C:/Program Files (x86)/NSIS" >> $GITHUB_PATH
+          echo "C:/Program Files/NSIS" >> $GITHUB_PATH
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -299,29 +283,26 @@ jobs:
       - name: Build PAF package
         shell: bash
         run: |
+          # Verify makensis is available
+          which makensis || echo "makensis not in PATH, searching..."
+          find "/c/Program Files" "/c/Program Files (x86)" -name "makensis.exe" 2>/dev/null || true
+
           python build/portable/build_paf.py \
             --installer   zen-installer.exe \
             --paf-template build/portable/paf \
             --icon         configs/branding/release/logo128.png \
-            --pal-dir      PAL \
-            --pai-dir      PAI \
+            --version      "${{ needs.check.outputs.tag }}" \
             --output       "ZenBrowserPortable_${{ needs.check.outputs.tag }}.paf.exe"
 
-      - name: Fallback — check for ZIP if paf.exe missing
+      - name: Verify output
         shell: bash
         run: |
           PAF="ZenBrowserPortable_${{ needs.check.outputs.tag }}.paf.exe"
-          if [ ! -f "$PAF" ]; then
-            echo "PAF exe not found, looking for fallback ZIP..."
-            ZIP="ZenBrowserPortable_${{ needs.check.outputs.tag }}.zip"
-            if [ -f "$ZIP" ]; then
-              echo "Found fallback: $ZIP"
-            else
-              echo "No output found!"
-              ls -la
-            fi
+          if [ -f "$PAF" ]; then
+            echo "✅ PAF built: $PAF ($(du -h "$PAF" | cut -f1))"
           else
-            echo "PAF built: $PAF ($(du -h "$PAF" | cut -f1))"
+            echo "PAF exe not produced, checking for fallback ZIP..."
+            ls -la ZenBrowserPortable_* 2>/dev/null || echo "No output files found"
           fi
 
       - name: Upload PAF artifact
