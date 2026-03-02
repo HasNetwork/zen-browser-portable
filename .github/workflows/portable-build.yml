@@ -245,10 +245,93 @@ jobs:
           path: ${{ matrix.output }}
           retention-days: 5
 
-  # ── Step 3: Create GitHub Release ────────────────────────────────
+  # ── Step 3: Build PAF (PortableApps.com Format) ──────────────────
+  paf:
+    name: PortableApps.com Format (PAF)
+    needs: check
+    if: needs.check.outputs.should_build == 'true'
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Zen installer (x64)
+        shell: bash
+        run: |
+          TAG="${{ needs.check.outputs.tag }}"
+          URL="https://github.com/zen-browser/desktop/releases/download/${TAG}/zen.installer.exe"
+          echo "Downloading $URL ..."
+          curl -fSL --retry 3 -o zen-installer.exe "$URL"
+          ls -lh zen-installer.exe
+
+      - name: Install tools (NSIS, 7-Zip, ImageMagick)
+        shell: powershell
+        run: |
+          choco install nsis 7zip imagemagick -y --no-progress
+          refreshenv
+
+      - name: Download PortableApps.com Launcher
+        shell: powershell
+        run: |
+          $palUrl = "https://downloads.sourceforge.net/portableapps/PortableApps.com_Launcher_2.2.9.paf.exe"
+          Invoke-WebRequest -Uri $palUrl -OutFile "PAL.paf.exe" -UseBasicParsing
+          # Extract the PAF (it's an NSIS installer, use 7z)
+          7z x -y -oPAL PAL.paf.exe | Out-Null
+          Write-Host "PAL extracted"
+
+      - name: Download PortableApps.com Installer
+        shell: powershell
+        run: |
+          $paiUrl = "https://downloads.sourceforge.net/portableapps/PortableApps.com_Installer_3.9.10.paf.exe"
+          Invoke-WebRequest -Uri $paiUrl -OutFile "PAI.paf.exe" -UseBasicParsing
+          7z x -y -oPAI PAI.paf.exe | Out-Null
+          Write-Host "PAI extracted"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Build PAF package
+        shell: bash
+        run: |
+          python build/portable/build_paf.py \
+            --installer   zen-installer.exe \
+            --paf-template build/portable/paf \
+            --icon         configs/branding/release/logo128.png \
+            --pal-dir      PAL \
+            --pai-dir      PAI \
+            --output       "ZenBrowserPortable_${{ needs.check.outputs.tag }}.paf.exe"
+
+      - name: Fallback — check for ZIP if paf.exe missing
+        shell: bash
+        run: |
+          PAF="ZenBrowserPortable_${{ needs.check.outputs.tag }}.paf.exe"
+          if [ ! -f "$PAF" ]; then
+            echo "PAF exe not found, looking for fallback ZIP..."
+            ZIP="ZenBrowserPortable_${{ needs.check.outputs.tag }}.zip"
+            if [ -f "$ZIP" ]; then
+              echo "Found fallback: $ZIP"
+            else
+              echo "No output found!"
+              ls -la
+            fi
+          else
+            echo "PAF built: $PAF ($(du -h "$PAF" | cut -f1))"
+          fi
+
+      - name: Upload PAF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZenBrowserPortable-paf
+          path: ZenBrowserPortable_${{ needs.check.outputs.tag }}.*
+          retention-days: 5
+
+  # ── Step 4: Create GitHub Release ────────────────────────────────
   release:
     name: Publish Release
-    needs: [check, portable]
+    needs: [check, portable, paf]
+    if: always() && needs.portable.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -271,20 +354,20 @@ jobs:
 
             ### Downloads
 
-            | File | Platform |
-            |---|---|
-            | `ZenBrowserPortable-windows-x86_64.zip` | 🪟 Windows x64 |
-            | `ZenBrowserPortable-windows-arm64.zip` | 🪟 Windows ARM64 |
-            | `ZenBrowserPortable-linux-x86_64.tar.gz` | 🐧 Linux x64 |
-            | `ZenBrowserPortable-linux-aarch64.tar.gz` | 🐧 Linux ARM64 |
-            | `ZenBrowserPortable-macos-universal.tar.gz` | 🍎 macOS (Intel + Apple Silicon) |
+            | File | Platform | Format |
+            |---|---|---|
+            | `ZenBrowserPortable-windows-x86_64.zip` | 🪟 Windows x64 | Standalone ZIP |
+            | `ZenBrowserPortable-windows-arm64.zip` | 🪟 Windows ARM64 | Standalone ZIP |
+            | `ZenBrowserPortable-linux-x86_64.tar.gz` | 🐧 Linux x64 | Standalone |
+            | `ZenBrowserPortable-linux-aarch64.tar.gz` | 🐧 Linux ARM64 | Standalone |
+            | `ZenBrowserPortable-macos-universal.tar.gz` | 🍎 macOS Universal | Standalone |
+            | `ZenBrowserPortable_*.paf.exe` | 🪟 Windows x64 | PortableApps.com Format |
 
             ### Usage
-            1. Download and extract the archive for your platform
-            2. Run **`zen-portable.exe`** (Windows) or **`./zen-portable`** (Linux/macOS)
-            3. All your data stays inside the `Data/` folder
+            - **Standalone**: Download → Extract → Run `zen-portable.exe` (Windows) or `./zen-portable` (Linux/macOS)
+            - **PortableApps.com**: Download the `.paf.exe` → Install via PortableApps.com Platform
 
-            No installation or admin rights needed. Works from USB drives.
+            All your data stays inside the `Data/` folder. No installation or admin rights needed.
           draft: false
           prerelease: false
           fail_on_unmatched_files: false
@@ -294,3 +377,5 @@ jobs:
             artifacts/ZenBrowserPortable-linux-x86_64.tar.gz/ZenBrowserPortable-linux-x86_64.tar.gz
             artifacts/ZenBrowserPortable-linux-aarch64.tar.gz/ZenBrowserPortable-linux-aarch64.tar.gz
             artifacts/ZenBrowserPortable-macos-universal.tar.gz/ZenBrowserPortable-macos-universal.tar.gz
+            artifacts/ZenBrowserPortable-paf/ZenBrowserPortable_*.paf.exe
+            artifacts/ZenBrowserPortable-paf/ZenBrowserPortable_*.zip

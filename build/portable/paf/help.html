@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Zen Browser Portable Help</title>
+		<style>
+			body {
+				font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+				max-width: 720px;
+				margin: 2em auto;
+				line-height: 1.6;
+				color: #333;
+				padding: 0 1em;
+			}
+			h1 {
+				color: #1a1a2e;
+				border-bottom: 2px solid #e94560;
+				padding-bottom: 0.3em;
+			}
+			h2 {
+				color: #1a1a2e;
+				margin-top: 1.5em;
+			}
+			code {
+				background: #f0f0f3;
+				padding: 2px 6px;
+				border-radius: 3px;
+				font-size: 0.95em;
+			}
+			.folder {
+				color: #e94560;
+				font-weight: bold;
+			}
+			table {
+				border-collapse: collapse;
+				width: 100%;
+				margin: 1em 0;
+			}
+			th,
+			td {
+				text-align: left;
+				padding: 8px 12px;
+				border-bottom: 1px solid #ddd;
+			}
+			th {
+				background: #f5f5f8;
+				font-weight: 600;
+			}
+			.note {
+				background: #fff3cd;
+				padding: 1em;
+				border-radius: 6px;
+				border-left: 4px solid #ffc107;
+				margin: 1em 0;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>Zen Browser Portable</h1>
+		<p>
+			A beautifully designed, privacy-focused browser &mdash; fully portable. No
+			installation needed.
+		</p>
+
+		<h2>Getting Started</h2>
+		<ol>
+			<li>Double-click <code>ZenBrowserPortable.exe</code></li>
+			<li>Browse the web &mdash; all data stays in this folder</li>
+			<li>
+				Close the browser when done &mdash; everything is saved automatically
+			</li>
+		</ol>
+
+		<h2>Folder Structure</h2>
+		<table>
+			<tr>
+				<th>Folder</th>
+				<th>Contains</th>
+			</tr>
+			<tr>
+				<td><span class="folder">App\zen\</span></td>
+				<td>Browser engine (do not modify)</td>
+			</tr>
+			<tr>
+				<td><span class="folder">App\AppInfo\</span></td>
+				<td>PortableApps.com configuration</td>
+			</tr>
+			<tr>
+				<td><span class="folder">App\DefaultData\</span></td>
+				<td>Default settings (copied on first run)</td>
+			</tr>
+			<tr>
+				<td><span class="folder">Data\profile\</span></td>
+				<td>Your bookmarks, history, passwords, extensions</td>
+			</tr>
+			<tr>
+				<td><span class="folder">Data\temp\</span></td>
+				<td>Temporary files (cleaned automatically)</td>
+			</tr>
+		</table>
+
+		<h2>Using from a USB Drive</h2>
+		<p>
+			Copy the entire <code>ZenBrowserPortable</code> folder to your USB drive.
+			The browser works regardless of which drive letter is assigned.
+		</p>
+
+		<h2>Updating</h2>
+		<ol>
+			<li>Close the browser completely</li>
+			<li>Download the latest version</li>
+			<li>Install over the existing folder</li>
+			<li>
+				Your <span class="folder">Data\</span> folder is preserved automatically
+			</li>
+		</ol>
+
+		<div class="note">
+			<strong>Note:</strong> Auto-updates are disabled in portable mode. Check
+			the
+			<a href="https://github.com/HasNetwork/zen-browser-portable/releases"
+				>releases page</a
+			>
+			for new versions.
+		</div>
+
+		<h2>Portable Defaults</h2>
+		<ul>
+			<li>Disk cache disabled (RAM cache used instead)</li>
+			<li>Telemetry &amp; crash reporting disabled</li>
+			<li>Default browser check disabled</li>
+			<li>Auto-updates disabled</li>
+		</ul>
+		<p>
+			You can change these in <code>about:config</code> or by editing
+			<code>Data\profile\user.js</code>.
+		</p>
+
+		<h2>Links</h2>
+		<ul>
+			<li><a href="https://zen-browser.app">Zen Browser Website</a></li>
+			<li>
+				<a href="https://github.com/HasNetwork/zen-browser-portable"
+					>Source Code &amp; Releases</a
+				>
+			</li>
+			<li><a href="https://portableapps.com">PortableApps.com</a></li>
+		</ul>
+
+		<hr />
+		<p>
+			<small
+				>Zen Browser Portable is an unofficial portable package. Zen Browser is
+				developed by the
+				<a href="https://github.com/zen-browser">Zen Browser team</a>. Licensed
+				under MPL-2.0.</small
+			>
+		</p>
+	</body>
+</html>
