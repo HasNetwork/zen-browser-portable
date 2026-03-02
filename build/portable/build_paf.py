@@ -45,7 +45,7 @@ def find_file(search_dir: str, filename: str) -> str | None:
 
 def run(cmd: list[str], label: str) -> None:
     """Run a command, print output, and exit on failure."""
-    print(f"  → {' '.join(cmd)}")
+    print(f"  > {' '.join(cmd)}")
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.stdout.strip():
         print(r.stdout.strip())
@@ -72,7 +72,7 @@ def generate_icons(source_png: str, appinfo_dir: str) -> None:
         out = os.path.join(appinfo_dir, filename)
         run(["magick", source_png, "-resize", f"{size}x{size}", out],
             f"generate {filename}")
-        print(f"  ✓ {filename} ({size}x{size})")
+        print(f"  OK: {filename} ({size}x{size})")
 
     # Generate ICO with multiple sizes
     ico_path = os.path.join(appinfo_dir, "appicon.ico")
@@ -80,7 +80,7 @@ def generate_icons(source_png: str, appinfo_dir: str) -> None:
          "-define", "icon:auto-resize=256,48,32,16",
          ico_path],
         "generate appicon.ico")
-    print(f"  ✓ appicon.ico (multi-size)")
+    print(f"  OK: appicon.ico (multi-size)")
 
 
 def build_paf(args: argparse.Namespace) -> None:
@@ -91,12 +91,12 @@ def build_paf(args: argparse.Namespace) -> None:
         appinfo_dir = os.path.join(app_dir, "AppInfo")
         staging = os.path.join(tmp, "_staging")
 
-        # ── 1. Copy PAF template files ──────────────────────────────
+        # -- 1. Copy PAF template files --------------------------------
         print("\n[1/6] Copying PAF template ...")
         template = args.paf_template
         shutil.copytree(template, paf_root, dirs_exist_ok=True)
 
-        # ── 2. Extract browser from NSIS installer ──────────────────
+        # -- 2. Extract browser from NSIS installer --------------------
         print("\n[2/6] Extracting Zen Browser ...")
         os.makedirs(staging, exist_ok=True)
         run(["7z", "x", "-y", f"-o{staging}", args.installer], "NSIS extraction")
@@ -124,9 +124,9 @@ def build_paf(args: argparse.Namespace) -> None:
                 else:
                     os.remove(target)
 
-        print(f"  ✓ Extracted to App/zen/ ({len(os.listdir(zen_dir))} items)")
+        print(f"  OK: Extracted to App/zen/ ({len(os.listdir(zen_dir))} items)")
 
-        # ── 3. Generate icons ───────────────────────────────────────
+        # -- 3. Generate icons -----------------------------------------
         print("\n[3/6] Generating icons ...")
         if args.icon and os.path.isfile(args.icon):
             generate_icons(args.icon, appinfo_dir)
@@ -136,9 +136,9 @@ def build_paf(args: argparse.Namespace) -> None:
             if os.path.isfile(browser_icon):
                 generate_icons(browser_icon, appinfo_dir)
             else:
-                print("  ⚠ No icon source found, skipping icon generation")
+                print("  WARN: No icon source found, skipping icon generation")
 
-        # ── 4. Update appinfo.ini version ───────────────────────────
+        # -- 4. Update appinfo.ini version -----------------------------
         print("\n[4/6] Updating version info ...")
         appinfo_path = os.path.join(appinfo_dir, "appinfo.ini")
         if os.path.isfile(appinfo_path):
@@ -166,9 +166,9 @@ def build_paf(args: argparse.Namespace) -> None:
             content = content.replace("DisplayVersion=1.0.0", f"DisplayVersion={args.version}")
             with open(appinfo_path, "w") as f:
                 f.write(content)
-            print(f"  ✓ PackageVersion={pkg_version}, DisplayVersion={args.version}")
+            print(f"  OK: PackageVersion={pkg_version}, DisplayVersion={args.version}")
 
-        # ── 5. Compile ZenBrowserPortable.exe (launcher) ────────────
+        # -- 5. Compile ZenBrowserPortable.exe (launcher) --------------
         print("\n[5/6] Compiling launcher (NSIS) ...")
         launcher_nsi = os.path.join(paf_root, "launcher.nsi")
         if os.path.isfile(launcher_nsi):
@@ -179,15 +179,15 @@ def build_paf(args: argparse.Namespace) -> None:
             launcher_exe = os.path.join(paf_root, "ZenBrowserPortable.exe")
             if os.path.isfile(launcher_exe):
                 size_kb = os.path.getsize(launcher_exe) // 1024
-                print(f"  ✓ ZenBrowserPortable.exe ({size_kb} KB)")
+                print(f"  OK: ZenBrowserPortable.exe ({size_kb} KB)")
             else:
-                print("  ⚠ Launcher exe not found after compilation")
+                print("  WARN: Launcher exe not found after compilation")
             # Remove the .nsi source from the final package
             os.remove(launcher_nsi)
         else:
-            print("  ⚠ launcher.nsi not found, skipping")
+            print("  WARN: launcher.nsi not found, skipping")
 
-        # ── 6. Compile .paf.exe (installer) ─────────────────────────
+        # -- 6. Compile .paf.exe (installer) --------------------------
         print("\n[6/6] Compiling installer (NSIS) ...")
         installer_nsi = os.path.join(paf_root, "installer.nsi")
         output_path = os.path.abspath(args.output)
@@ -204,12 +204,12 @@ def build_paf(args: argparse.Namespace) -> None:
             # Remove the .nsi source from package
             os.remove(installer_nsi)
         else:
-            print("  ⚠ installer.nsi not found, falling back to ZIP")
+            print("  WARN: installer.nsi not found, falling back to ZIP")
 
-        # ── Check result ────────────────────────────────────────────
+        # -- Check result ----------------------------------------------
         if os.path.isfile(output_path):
             size_mb = os.path.getsize(output_path) / 1048576
-            print(f"\n✅ Done! {output_path} ({size_mb:.1f} MB)")
+            print(f"\nDONE: {output_path} ({size_mb:.1f} MB)")
         else:
             # Fallback to ZIP
             print("\n  Falling back to ZIP output ...")
@@ -218,9 +218,9 @@ def build_paf(args: argparse.Namespace) -> None:
             final = zip_path + ".zip"
             if os.path.isfile(final):
                 size_mb = os.path.getsize(final) / 1048576
-                print(f"\n✅ Done! {final} ({size_mb:.1f} MB)")
+                print(f"\nDONE: {final} ({size_mb:.1f} MB)")
             else:
-                print("\n❌ Failed to create output!")
+                print("\nFAILED: Could not create output!")
                 sys.exit(1)
 
 
