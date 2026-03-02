@@ -275,17 +275,21 @@ jobs:
         run: |
           $palUrl = "https://downloads.sourceforge.net/portableapps/PortableApps.com_Launcher_2.2.9.paf.exe"
           Invoke-WebRequest -Uri $palUrl -OutFile "PAL.paf.exe" -UseBasicParsing
-          # Extract the PAF (it's an NSIS installer, use 7z)
-          7z x -y -oPAL PAL.paf.exe | Out-Null
-          Write-Host "PAL extracted"
+          # Run the NSIS installer silently to extract
+          $dest = "$PWD\PAL"
+          Start-Process -Wait -FilePath ".\PAL.paf.exe" -ArgumentList "/S", "/D=$dest"
+          Write-Host "PAL installed to $dest"
+          Get-ChildItem $dest -Recurse -Depth 1 | Select-Object -First 20
 
       - name: Download PortableApps.com Installer
         shell: powershell
         run: |
           $paiUrl = "https://downloads.sourceforge.net/portableapps/PortableApps.com_Installer_3.9.10.paf.exe"
           Invoke-WebRequest -Uri $paiUrl -OutFile "PAI.paf.exe" -UseBasicParsing
-          7z x -y -oPAI PAI.paf.exe | Out-Null
-          Write-Host "PAI extracted"
+          $dest = "$PWD\PAI"
+          Start-Process -Wait -FilePath ".\PAI.paf.exe" -ArgumentList "/S", "/D=$dest"
+          Write-Host "PAI installed to $dest"
+          Get-ChildItem $dest -Recurse -Depth 1 | Select-Object -First 20
 
       - name: Setup Python
         uses: actions/setup-python@v5
