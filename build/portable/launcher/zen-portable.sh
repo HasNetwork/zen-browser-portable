@@ -40,6 +40,40 @@ export TEMP="$TEMP_DIR"
 export TMP="$TEMP_DIR"
 export MOZ_CRASHREPORTER_DISABLE=1
 
+# ── Check system dependencies (Linux only) ─────────────────────────
+if [ "$(uname)" = "Linux" ]; then
+    MISSING=""
+    PACKAGES=""
+
+    check_lib() {
+        if ! ldconfig -p 2>/dev/null | grep -q "$1"; then
+            MISSING="$MISSING  - $1 ($2)\n"
+            PACKAGES="$PACKAGES $3"
+        fi
+    }
+
+    check_lib "libasound.so.2"      "ALSA audio"        "libasound2"
+    check_lib "libgtk-3.so.0"       "GTK 3"             "libgtk-3-0"
+    check_lib "libdbus-1.so.3"      "D-Bus"             "libdbus-1-3"
+    check_lib "libX11.so.6"         "X11"               "libx11-6"
+    check_lib "libXt.so.6"          "Xt toolkit"        "libxt6"
+    check_lib "libXtst.so.6"        "Xt testing"        "libxtst6"
+
+    if [ -n "$MISSING" ]; then
+        echo "Zen Browser Portable: missing system libraries:"
+        echo ""
+        printf "$MISSING"
+        echo ""
+        echo "Install them with:"
+        echo "  sudo apt install libasound-dev libgtk-3-dev libdbus-1-dev libx11-dev libxt-dev libxtst-dev  # Debian/Ubuntu"
+        echo "  sudo dnf install alsa-lib gtk3 dbus-libs libX11 libXt libXtst  # Fedora"
+        echo "  sudo pacman -S alsa-lib gtk3 dbus libx11 libxt libxtst         # Arch"
+        echo ""
+        echo "Then try again."
+        exit 1
+    fi
+fi
+
 # ── Find zen executable ────────────────────────────────────────────
 ZEN_EXE=""
 
@@ -76,4 +110,6 @@ if [ -z "$ZEN_EXE" ] || [ ! -f "$ZEN_EXE" ]; then
 fi
 
 # ── Launch ──────────────────────────────────────────────────────────
+# Ensure execute permission (may be lost on FAT32/exFAT or after extract)
+chmod +x "$ZEN_EXE" 2>/dev/null || true
 exec "$ZEN_EXE" --profile "$PROFILE_DIR" --no-remote "$@"

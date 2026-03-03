@@ -115,13 +115,28 @@ def copy_tree(src: str, dst: str) -> None:
 
 def create_tar_gz(source_dir: str, output_path: str, root_name: str) -> None:
     """Create a .tar.gz archive preserving permissions and symlinks."""
+    # Files that must be executable in the archive
+    EXECUTABLE_NAMES = {"zen", "zen-bin", "zen-portable", "glxtest", "updater"}
+    EXECUTABLE_EXTENSIONS = {".sh"}
+
     print(f"Creating {output_path} ...")
     with tarfile.open(output_path, "w:gz") as tf:
         for dirpath, dirnames, filenames in os.walk(source_dir):
             for name in dirnames + filenames:
                 full = os.path.join(dirpath, name)
                 arc = os.path.join(root_name, os.path.relpath(full, source_dir))
-                tf.add(full, arcname=arc, recursive=False)
+                info = tf.gettarinfo(full, arcname=arc)
+                # Ensure known executables have the execute bit set
+                basename = os.path.basename(name)
+                _, ext = os.path.splitext(basename)
+                is_in_macos_bundle = "Contents/MacOS" in full
+                if basename in EXECUTABLE_NAMES or ext in EXECUTABLE_EXTENSIONS or is_in_macos_bundle:
+                    info.mode = 0o755
+                if info.isfile():
+                    with open(full, "rb") as fh:
+                        tf.addfile(info, fh)
+                else:
+                    tf.addfile(info)
 
 
 def create_zip(source_dir: str, output_path: str, root_name: str) -> None:
