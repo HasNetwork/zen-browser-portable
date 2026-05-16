@@ -317,6 +317,8 @@ jobs:
     name: Publish Release
     needs: [check, portable, paf]
     if: always() && needs.portable.result == 'success'
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
@@ -356,6 +358,7 @@ jobs:
           draft: false
           prerelease: false
           fail_on_unmatched_files: false
+          make_latest: true
           files: |
             artifacts/ZenBrowserPortable-windows-x86_64.zip/ZenBrowserPortable-windows-x86_64.zip
             artifacts/ZenBrowserPortable-windows-arm64.zip/ZenBrowserPortable-windows-arm64.zip
