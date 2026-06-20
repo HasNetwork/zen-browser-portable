@@ -23,6 +23,7 @@ on:
 permissions:
   contents: write
   actions: read
+  id-token: write
 
 jobs:
   # ── Step 1: Check for new release ─────────────────────────────────
@@ -84,14 +85,14 @@ jobs:
           # ── Windows ──
           - label: Windows x64
             platform: windows
-            runner: ubuntu-latest
+            runner: windows-latest
             arch: x86_64
             goarch: amd64
             asset: zen.installer.exe
             output: ZenBrowserPortable-windows-x86_64.zip
           - label: Windows ARM64
             platform: windows
-            runner: ubuntu-latest
+            runner: windows-latest
             arch: arm64
             goarch: arm64
             asset: zen.installer-arm64.exe
@@ -123,6 +124,7 @@ jobs:
 
       # ── Download upstream release ─────────────────────────────────
       - name: Download ${{ matrix.asset }} (${{ needs.check.outputs.tag }})
+        shell: bash
         run: |
           TAG="${{ needs.check.outputs.tag }}"
           URL="https://github.com/zen-browser/desktop/releases/download/${TAG}/${{ matrix.asset }}"
@@ -131,8 +133,13 @@ jobs:
           ls -lh zen-release-asset
 
       - name: Install 7z (Windows/Linux only)
-        if: matrix.platform != 'macos'
+        if: matrix.platform == 'linux'
         run: sudo apt-get update && sudo apt-get install -y p7zip-full
+
+      - name: Install 7z (Windows only)
+        if: matrix.platform == 'windows'
+        shell: powershell
+        run: choco install 7zip -y --no-progress
 
       # ── Build Go launcher (Windows only) ──────────────────────────
       - name: Setup Go
@@ -148,6 +155,7 @@ jobs:
       - name: Generate Windows resources
         if: matrix.platform == 'windows'
         working-directory: build/portable/launcher
+        shell: bash
         run: |
           mkdir -p winres
           cp "$GITHUB_WORKSPACE/configs/branding/release/logo128.png" winres/icon.png 2>/dev/null || true
@@ -194,6 +202,7 @@ jobs:
       - name: Compile launcher (${{ matrix.goarch }})
         if: matrix.platform == 'windows'
         working-directory: build/portable/launcher
+        shell: bash
         env:
           GOOS: windows
           GOARCH: ${{ matrix.goarch }}
@@ -201,6 +210,45 @@ jobs:
         run: |
           go build -ldflags="-s -w -H=windowsgui" -o zen-portable.exe .
           ls -lh zen-portable.exe
+
+      - name: Require code signing configuration (Windows only)
+        if: matrix.platform == 'windows'
+        shell: bash
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_ARTIFACT_SIGNING_ENDPOINT: ${{ secrets.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          AZURE_ARTIFACT_SIGNING_ACCOUNT: ${{ secrets.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          AZURE_ARTIFACT_SIGNING_PROFILE: ${{ secrets.AZURE_ARTIFACT_SIGNING_PROFILE }}
+        run: |
+          missing=0
+          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_ARTIFACT_SIGNING_ENDPOINT AZURE_ARTIFACT_SIGNING_ACCOUNT AZURE_ARTIFACT_SIGNING_PROFILE; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is required to sign Windows executables and avoid SmartScreen's unrecognized-app warning."
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Azure login for code signing (Windows only)
+        if: matrix.platform == 'windows'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign standalone launcher (Windows only)
+        if: matrix.platform == 'windows'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ secrets.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ secrets.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_ARTIFACT_SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\build\portable\launcher
+          files-folder-filter: exe
+          file-digest: SHA256
 
       # ── Package ───────────────────────────────────────────────────
       - name: Setup Python
@@ -210,8 +258,9 @@ jobs:
 
       - name: Create portable package (Windows)
         if: matrix.platform == 'windows'
+        shell: bash
         run: |
-          python3 build/portable/package.py \
+          python build/portable/package.py \
             --installer   zen-release-asset \
             --launcher    build/portable/launcher/zen-portable.exe \
             --assets-dir  build/portable/assets \
@@ -292,7 +341,71 @@ jobs:
             --paf-template build/portable/paf \
             --icon         configs/branding/release/logo128.png \
             --version      "${{ needs.check.outputs.tag }}" \
-            --output       "ZenBrowserPortable_${{ needs.check.outputs.tag }}.paf.exe"
+            --output       "ZenBrowserPortable_${{ needs.check.outputs.tag }}.paf.exe" \
+            --keep-build-dir \
+            --prepare-only
+
+      - name: Require code signing configuration
+        shell: bash
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_ARTIFACT_SIGNING_ENDPOINT: ${{ secrets.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          AZURE_ARTIFACT_SIGNING_ACCOUNT: ${{ secrets.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          AZURE_ARTIFACT_SIGNING_PROFILE: ${{ secrets.AZURE_ARTIFACT_SIGNING_PROFILE }}
+        run: |
+          missing=0
+          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_ARTIFACT_SIGNING_ENDPOINT AZURE_ARTIFACT_SIGNING_ACCOUNT AZURE_ARTIFACT_SIGNING_PROFILE; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is required to sign Windows executables and avoid SmartScreen's unrecognized-app warning."
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Azure login for code signing
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign PAF launcher
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ secrets.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ secrets.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_ARTIFACT_SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\_paf_build\ZenBrowserPortable
+          files-folder-filter: exe
+          file-digest: SHA256
+
+      - name: Create signed PAF installer
+        shell: bash
+        run: |
+          mkdir -p _paf_sign
+          python build/portable/build_paf.py \
+            --installer   zen-installer.exe \
+            --paf-template build/portable/paf \
+            --icon         configs/branding/release/logo128.png \
+            --version      "${{ needs.check.outputs.tag }}" \
+            --output       "_paf_sign/ZenBrowserPortable_${{ needs.check.outputs.tag }}.paf.exe" \
+            --installer-only
+
+      - name: Sign PAF installer
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ secrets.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ secrets.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_ARTIFACT_SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\_paf_sign
+          files-folder-filter: exe
+          file-digest: SHA256
+
+      - name: Move signed PAF installer into release root
+        shell: bash
+        run: mv "_paf_sign/ZenBrowserPortable_${{ needs.check.outputs.tag }}.paf.exe" .
 
       - name: Verify output
         shell: bash

@@ -123,6 +123,21 @@ No modifications are made to the Zen Browser engine — it's the exact same buil
 
 **Requirements:** Go (Windows only), Python 3, 7-Zip
 
+### Windows release signing
+
+Windows release builds are Authenticode-signed in GitHub Actions with Azure Artifact Signing before they are uploaded. This is required for the downloaded `.exe` files to have a trusted publisher identity and avoid Microsoft Defender SmartScreen's "Windows protected your PC" warning for unsigned/unrecognized apps.
+
+Configure these repository secrets before publishing Windows releases:
+
+- `AZURE_CLIENT_ID`
+- `AZURE_TENANT_ID`
+- `AZURE_SUBSCRIPTION_ID`
+- `AZURE_ARTIFACT_SIGNING_ENDPOINT`
+- `AZURE_ARTIFACT_SIGNING_ACCOUNT`
+- `AZURE_ARTIFACT_SIGNING_PROFILE`
+
+If any signing secret is missing, Windows release jobs fail instead of publishing unsigned executables.
+
 ```bash
 # Windows: compile the Go launcher
 cd build/portable/launcher

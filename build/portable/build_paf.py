@@ -85,7 +85,11 @@ def generate_icons(source_png: str, appinfo_dir: str) -> None:
 
 def build_paf(args: argparse.Namespace) -> None:
     # Use a local build dir instead of system temp (avoids Windows path issues)
-    tmp = os.path.join(os.getcwd(), "_paf_build")
+    tmp = os.path.abspath(args.build_dir)
+    if args.installer_only:
+        _compile_paf_installer(args, tmp)
+        return
+
     if os.path.exists(tmp):
         shutil.rmtree(tmp, ignore_errors=True)
     os.makedirs(tmp, exist_ok=True)
@@ -94,7 +98,8 @@ def build_paf(args: argparse.Namespace) -> None:
         _build_paf_inner(args, tmp)
     finally:
         # Best-effort cleanup
-        shutil.rmtree(tmp, ignore_errors=True)
+        if not args.keep_build_dir:
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 def _build_paf_inner(args: argparse.Namespace, tmp: str) -> None:
@@ -199,6 +204,16 @@ def _build_paf_inner(args: argparse.Namespace, tmp: str) -> None:
     else:
         print("  WARN: launcher.nsi not found, skipping")
 
+    if args.prepare_only:
+        print(f"\nPrepared PAF tree for signing: {paf_root}")
+        return
+
+    _compile_paf_installer(args, tmp)
+
+
+def _compile_paf_installer(args: argparse.Namespace, tmp: str) -> None:
+    paf_root = os.path.join(tmp, "ZenBrowserPortable")
+
     # -- 6. Compile .paf.exe (installer) --------------------------
     print("\n[6/6] Compiling installer (NSIS) ...")
     installer_nsi = os.path.join(paf_root, "installer.nsi")
@@ -243,6 +258,12 @@ def main() -> None:
     p.add_argument("--icon", help="Source PNG for icon generation")
     p.add_argument("--version", default="0.0.0", help="Version string (e.g. 1.19b)")
     p.add_argument("--output", required=True, help="Output .paf.exe path")
+    p.add_argument("--build-dir", default="_paf_build", help="Working directory for the staged PAF tree")
+    p.add_argument("--keep-build-dir", action="store_true", help="Keep the staged PAF tree after building")
+    p.add_argument("--prepare-only", action="store_true",
+                   help="Stop after compiling ZenBrowserPortable.exe so it can be signed before creating the installer")
+    p.add_argument("--installer-only", action="store_true",
+                   help="Create the final installer from an existing staged PAF tree")
     args = p.parse_args()
 
     if not os.path.isfile(args.installer):
