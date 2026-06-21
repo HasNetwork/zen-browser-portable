@@ -4,7 +4,7 @@
 
   GETTING STARTED
   ---------------
-  Double-click "zen-portable.exe" to launch Zen Browser.
+  Double-click "zen-portable.cmd" to launch Zen Browser in portable mode.
 
   All your data (bookmarks, history, passwords, extensions)
   is stored in the "Data" folder next to this file.
@@ -13,7 +13,8 @@
   FOLDER STRUCTURE
   ----------------
     ZenBrowserPortable/
-    |-- zen-portable.exe     <-- Launch this!
+    |-- zen-portable.cmd     <-- Launch this!
+    |-- defaults\user.js     <-- Default portable preferences
     |-- portable.ini         <-- Portable mode marker
     |-- App/                 <-- Browser engine (do not modify)
     |-- Data/                <-- Your personal data

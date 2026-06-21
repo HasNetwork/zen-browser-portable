@@ -87,14 +87,12 @@ jobs:
             platform: windows
             runner: windows-latest
             arch: x86_64
-            goarch: amd64
             asset: zen.installer.exe
             output: ZenBrowserPortable-windows-x86_64.zip
           - label: Windows ARM64
             platform: windows
             runner: windows-latest
             arch: arm64
-            goarch: arm64
             asset: zen.installer-arm64.exe
             output: ZenBrowserPortable-windows-arm64.zip
           # ── Linux ──
@@ -141,115 +139,6 @@ jobs:
         shell: powershell
         run: choco install 7zip -y --no-progress
 
-      # ── Build Go launcher (Windows only) ──────────────────────────
-      - name: Setup Go
-        if: matrix.platform == 'windows'
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.22"
-
-      - name: Install go-winres
-        if: matrix.platform == 'windows'
-        run: go install github.com/tc-hib/go-winres@latest
-
-      - name: Generate Windows resources
-        if: matrix.platform == 'windows'
-        working-directory: build/portable/launcher
-        shell: bash
-        run: |
-          mkdir -p winres
-          cp "$GITHUB_WORKSPACE/configs/branding/release/logo128.png" winres/icon.png 2>/dev/null || true
-          cat > winres/winres.json << 'MANIFEST'
-          {
-            "RT_GROUP_ICON": {
-              "APP": { "0000": ["icon.png"] }
-            },
-            "RT_MANIFEST": {
-              "#1": {
-                "0000": {
-                  "identity": { "name": "Zen Browser Portable", "version": "1.0.0.0" },
-                  "description": "Zen Browser Portable Launcher",
-                  "minimum-os": "win7",
-                  "execution-level": "as-invoker",
-                  "dpi-awareness": "per-monitor-v2",
-                  "use-common-controls-v6": true
-                }
-              }
-            },
-            "RT_VERSION": {
-              "#1": {
-                "0000": {
-                  "fixed": { "file_version": "1.0.0.0", "product_version": "1.0.0.0" },
-                  "info": {
-                    "0409": {
-                      "CompanyName": "Zen Browser",
-                      "FileDescription": "Zen Browser Portable Launcher",
-                      "InternalName": "zen-portable",
-                      "LegalCopyright": "MPL-2.0",
-                      "OriginalFilename": "zen-portable.exe",
-                      "ProductName": "Zen Browser Portable"
-                    }
-                  }
-                }
-              }
-            }
-          }
-          MANIFEST
-          if [ -f winres/icon.png ]; then
-            go-winres make --arch ${{ matrix.goarch }} || echo "Warning: go-winres failed"
-          fi
-
-      - name: Compile launcher (${{ matrix.goarch }})
-        if: matrix.platform == 'windows'
-        working-directory: build/portable/launcher
-        shell: bash
-        env:
-          GOOS: windows
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: "0"
-        run: |
-          go build -ldflags="-s -w -H=windowsgui" -o zen-portable.exe .
-          ls -lh zen-portable.exe
-
-      - name: Require code signing configuration (Windows only)
-        if: matrix.platform == 'windows'
-        shell: bash
-        env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          AZURE_ARTIFACT_SIGNING_ENDPOINT: ${{ secrets.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
-          AZURE_ARTIFACT_SIGNING_ACCOUNT: ${{ secrets.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
-          AZURE_ARTIFACT_SIGNING_PROFILE: ${{ secrets.AZURE_ARTIFACT_SIGNING_PROFILE }}
-        run: |
-          missing=0
-          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_ARTIFACT_SIGNING_ENDPOINT AZURE_ARTIFACT_SIGNING_ACCOUNT AZURE_ARTIFACT_SIGNING_PROFILE; do
-            if [ -z "${!name}" ]; then
-              echo "::error::$name is required to sign Windows executables and avoid SmartScreen's unrecognized-app warning."
-              missing=1
-            fi
-          done
-          exit "$missing"
-
-      - name: Azure login for code signing (Windows only)
-        if: matrix.platform == 'windows'
-        uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Sign standalone launcher (Windows only)
-        if: matrix.platform == 'windows'
-        uses: azure/artifact-signing-action@v2
-        with:
-          endpoint: ${{ secrets.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ secrets.AZURE_ARTIFACT_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ secrets.AZURE_ARTIFACT_SIGNING_PROFILE }}
-          files-folder: ${{ github.workspace }}\build\portable\launcher
-          files-folder-filter: exe
-          file-digest: SHA256
-
       # ── Package ───────────────────────────────────────────────────
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -262,7 +151,8 @@ jobs:
         run: |
           python build/portable/package.py \
             --installer   zen-release-asset \
-            --launcher    build/portable/launcher/zen-portable.exe \
+            --windows-launcher build/portable/launcher/zen-portable.cmd \
+            --user-js     build/portable/launcher/defaults/user.js \
             --assets-dir  build/portable/assets \
             --output      "${{ matrix.output }}"
 
@@ -461,10 +351,10 @@ jobs:
             | `ZenBrowserPortable-linux-x86_64.tar.gz` | 🐧 Linux x64 | Standalone |
             | `ZenBrowserPortable-linux-aarch64.tar.gz` | 🐧 Linux ARM64 | Standalone |
             | `ZenBrowserPortable-macos-universal.tar.gz` | 🍎 macOS Universal | Standalone |
-            | `ZenBrowserPortable_*.paf.exe` | 🪟 Windows x64 | PortableApps.com Format |
+            | `ZenBrowserPortable_*.paf.exe` | 🪟 Windows x64 | PortableApps.com Format, signed builds only |
 
             ### Usage
-            - **Standalone**: Download → Extract → Run `zen-portable.exe` (Windows) or `./zen-portable` (Linux/macOS)
+            - **Standalone**: Download → Extract → Run `zen-portable.cmd` (Windows) or `./zen-portable` (Linux/macOS)
             - **PortableApps.com**: Download the `.paf.exe` → Install via PortableApps.com Platform
 
             All your data stays inside the `Data/` folder. No installation or admin rights needed.

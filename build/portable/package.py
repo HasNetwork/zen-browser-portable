@@ -4,6 +4,10 @@ Package Zen Browser Portable for Windows, Linux, and macOS.
 
 Usage:
     # Windows (NSIS installer → ZIP)
+    python package.py --installer zen.installer.exe --windows-launcher zen-portable.cmd \
+        --user-js defaults/user.js --output ZenBrowserPortable-x86_64.zip
+
+    # Legacy/custom Windows launcher (.exe)
     python package.py --installer zen.installer.exe --launcher zen-portable.exe \
         --output ZenBrowserPortable-x86_64.zip
 
@@ -222,6 +226,10 @@ def package_portable(args: argparse.Namespace) -> None:
             # Windows: compiled Go exe
             shutil.copy2(args.launcher, os.path.join(root, "zen-portable.exe"))
 
+        if args.windows_launcher:
+            # Windows: script launcher avoids publishing an unsigned fork-built exe.
+            shutil.copy2(args.windows_launcher, os.path.join(root, "zen-portable.cmd"))
+
         if args.shell_launcher:
             # Linux / macOS: shell script
             dest = os.path.join(root, "zen-portable")
@@ -229,7 +237,7 @@ def package_portable(args: argparse.Namespace) -> None:
             os.chmod(dest, 0o755)
 
         if args.user_js:
-            # Ship defaults/user.js for the shell launcher to copy
+            # Ship defaults/user.js for launchers to copy
             defaults_dir = os.path.join(root, "defaults")
             os.makedirs(defaults_dir, exist_ok=True)
             shutil.copy2(args.user_js, os.path.join(defaults_dir, "user.js"))
@@ -260,6 +268,7 @@ def main() -> None:
     src.add_argument("--dmg", help="macOS disk image (.dmg)")
 
     p.add_argument("--launcher", help="Compiled Windows launcher (.exe)")
+    p.add_argument("--windows-launcher", help="Windows script launcher (.cmd)")
     p.add_argument("--shell-launcher", help="Shell script launcher (Linux/macOS)")
     p.add_argument("--user-js", help="Default user.js to include in defaults/")
     p.add_argument("--output", required=True, help="Output archive path")
