@@ -7,10 +7,6 @@ Usage:
     python package.py --installer zen.installer.exe --windows-launcher zen-portable.cmd \
         --user-js defaults/user.js --output ZenBrowserPortable-x86_64.zip
 
-    # Legacy/custom Windows launcher (.exe)
-    python package.py --installer zen.installer.exe --launcher zen-portable.exe \
-        --output ZenBrowserPortable-x86_64.zip
-
     # Linux (tar.xz → tar.gz)
     python package.py --tarball zen.linux-x86_64.tar.xz --shell-launcher zen-portable.sh \
         --user-js defaults/user.js --output ZenBrowserPortable-linux-x86_64.tar.gz
@@ -222,10 +218,6 @@ def package_portable(args: argparse.Namespace) -> None:
                 print(f"  Removed: {unwanted}")
 
         # ── Copy launcher ───────────────────────────────────────────
-        if args.launcher:
-            # Windows: compiled Go exe
-            shutil.copy2(args.launcher, os.path.join(root, "zen-portable.exe"))
-
         if args.windows_launcher:
             # Windows: script launcher avoids publishing an unsigned fork-built exe.
             shutil.copy2(args.windows_launcher, os.path.join(root, "zen-portable.cmd"))
@@ -267,7 +259,6 @@ def main() -> None:
     src.add_argument("--tarball", help="Linux tar archive (.tar.xz)")
     src.add_argument("--dmg", help="macOS disk image (.dmg)")
 
-    p.add_argument("--launcher", help="Compiled Windows launcher (.exe)")
     p.add_argument("--windows-launcher", help="Windows script launcher (.cmd)")
     p.add_argument("--shell-launcher", help="Shell script launcher (Linux/macOS)")
     p.add_argument("--user-js", help="Default user.js to include in defaults/")

@@ -19,6 +19,11 @@ on:
         required: false
         type: boolean
         default: false
+      build_paf:
+        description: "Also build the signed PortableApps.com installer"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -188,7 +193,7 @@ jobs:
   paf:
     name: PortableApps.com Format (PAF)
     needs: check
-    if: needs.check.outputs.should_build == 'true'
+    if: needs.check.outputs.should_build == 'true' && github.event.inputs.build_paf == 'true'
     runs-on: windows-latest
     steps:
       - name: Checkout repository
@@ -318,7 +323,7 @@ jobs:
   # ── Step 4: Create GitHub Release ────────────────────────────────
   release:
     name: Publish Release
-    needs: [check, portable, paf]
+    needs: [check, portable]
     if: always() && needs.portable.result == 'success'
     permissions:
       contents: write
@@ -351,11 +356,9 @@ jobs:
             | `ZenBrowserPortable-linux-x86_64.tar.gz` | 🐧 Linux x64 | Standalone |
             | `ZenBrowserPortable-linux-aarch64.tar.gz` | 🐧 Linux ARM64 | Standalone |
             | `ZenBrowserPortable-macos-universal.tar.gz` | 🍎 macOS Universal | Standalone |
-            | `ZenBrowserPortable_*.paf.exe` | 🪟 Windows x64 | PortableApps.com Format, signed builds only |
 
             ### Usage
             - **Standalone**: Download → Extract → Run `zen-portable.cmd` (Windows) or `./zen-portable` (Linux/macOS)
-            - **PortableApps.com**: Download the `.paf.exe` → Install via PortableApps.com Platform
 
             All your data stays inside the `Data/` folder. No installation or admin rights needed.
           draft: false
@@ -368,5 +371,3 @@ jobs:
             artifacts/ZenBrowserPortable-linux-x86_64.tar.gz/ZenBrowserPortable-linux-x86_64.tar.gz
             artifacts/ZenBrowserPortable-linux-aarch64.tar.gz/ZenBrowserPortable-linux-aarch64.tar.gz
             artifacts/ZenBrowserPortable-macos-universal.tar.gz/ZenBrowserPortable-macos-universal.tar.gz
-            artifacts/ZenBrowserPortable-paf/ZenBrowserPortable_*.paf.exe
-            artifacts/ZenBrowserPortable-paf/ZenBrowserPortable_*.zip

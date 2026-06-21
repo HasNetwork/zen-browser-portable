@@ -36,7 +36,7 @@
   --------
   1. Close Zen Browser completely.
   2. Download the latest release ZIP from:
-       https://github.com/zen-browser/desktop/releases
+       https://github.com/nkhokhla/zen-browser-portable/releases
   3. Delete the contents of the "App" folder.
   4. Extract the new release ZIP into the "App" folder.
   5. Your data in "Data" is preserved.

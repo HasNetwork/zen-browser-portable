@@ -29,18 +29,12 @@ An **unofficial portable build** of [Zen Browser](https://zen-browser.app) for W
 | `ZenBrowserPortable-linux-x86_64.tar.gz`    | 🐧 Linux x64                     | Standalone       |
 | `ZenBrowserPortable-linux-aarch64.tar.gz`   | 🐧 Linux ARM64                   | Standalone       |
 | `ZenBrowserPortable-macos-universal.tar.gz` | 🍎 macOS (Intel + Apple Silicon) | Standalone       |
-| `ZenBrowserPortable_*.paf.exe`              | 🪟 Windows x64                   | PortableApps.com, signed builds only |
 
 ## 🚀 Getting Started
 
 **Windows (Standalone):**
 
 1. Download the `.zip` → Extract → Double-click **`zen-portable.cmd`**
-
-**Windows (PortableApps.com):**
-
-1. Download the `.paf.exe` only when a signed PAF build is available → Double-click → Choose install location → Run **`ZenBrowserPortable.exe`**
-2. Or install via the PortableApps.com Platform for menu integration
 
 **Linux / macOS:**
 
@@ -87,12 +81,11 @@ ZenBrowserPortable/
 | **Coexists with installed Zen** | Uses `--no-remote` — won't interfere with an existing installation              |
 | **Auto-updated builds**         | New portable builds are published automatically when Zen releases a new version |
 | **Popup-free Windows ZIP**      | The standalone ZIP avoids fork-built `.exe` launchers that trigger SmartScreen  |
-| **PortableApps.com Format**     | Available only for signed builds that integrate with the PortableApps.com Platform |
 
 ## 🔄 Updating
 
 1. Close Zen Browser completely
-2. Download the latest archive from [Releases](https://github.com/HasNetwork/zen-browser-portable/releases/latest)
+2. Download the latest archive from [this fork's Releases](https://github.com/nkhokhla/zen-browser-portable/releases/latest)
 3. Delete the contents of the `App/` folder
 4. Extract the new archive's `App/` folder into your existing one
 5. Your `Data/` folder (bookmarks, history, etc.) is preserved
@@ -115,15 +108,13 @@ You can change any of these in `about:config` or by editing `Data/profile/user.j
 
 **Windows (Standalone):** The launcher (`zen-portable.cmd`) resolves its own directory, redirects TEMP/TMP, seeds the portable profile, and launches the upstream `App\zen.exe --profile Data\profile --no-remote`. The standalone ZIP intentionally does not include a fork-built `.exe` launcher, which avoids Microsoft Defender SmartScreen's unrecognized-app warning for the portable wrapper.
 
-**Windows (PAF):** The launcher (`ZenBrowserPortable.exe`) is compiled by the [PortableApps.com Launcher](https://portableapps.com/apps/development/portableapps.com_launcher). It does the same job — redirects profile, temp, and APPDATA — but integrates with the PortableApps.com Platform menu and follows the [PAF spec](https://portableapps.com/development/portableapps.com_format).
-
 **Linux / macOS:** The launcher (`zen-portable`) is a bash script that does the same — finds the `zen` binary or `.app` bundle in `App/`, sets environment variables, and launches with `--profile`.
 
 No modifications are made to the Zen Browser engine — it's the exact same build from the [official releases](https://github.com/zen-browser/desktop/releases).
 
 ## 🔨 Building From Source
 
-**Requirements:** Python 3 and 7-Zip for standalone packages. PAF installer builds also require NSIS, ImageMagick, and a valid code-signing setup before publishing.
+**Requirements:** Python 3 and 7-Zip.
 
 ```bash
 # Package (Windows)
@@ -150,14 +141,6 @@ python build/portable/package.py \
   --assets-dir build/portable/assets \
   --output ZenBrowserPortable-macos-universal.tar.gz
 
-# PortableApps.com Format (Windows — requires NSIS, 7z, ImageMagick)
-python build/portable/build_paf.py \
-  --installer zen.installer.exe \
-  --paf-template build/portable/paf \
-  --icon configs/branding/release/logo128.png \
-  --pal-dir /path/to/PortableApps.comLauncher \
-  --pai-dir /path/to/PortableApps.comInstaller \
-  --output ZenBrowserPortable_1.0.0.paf.exe
 ```
 
 Or just push to GitHub — the [Portable Build workflow](.github/workflows/portable-build.yml) handles everything automatically.
